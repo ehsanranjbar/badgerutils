@@ -17,7 +17,7 @@ func TestPrefixStore(t *testing.T) {
 
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
-	store := badgerutils.NewPrefixStore(txn, "prefix")
+	store := badgerutils.NewPrefixStore(txn, []byte("prefix"))
 
 	var (
 		key   = []byte("foo")

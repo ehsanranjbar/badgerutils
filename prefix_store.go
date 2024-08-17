@@ -6,15 +6,15 @@ import (
 
 // PrefixStore is a store that prefixes all keys with a given prefix.
 type PrefixStore struct {
-	base   Store
+	base   BadgerStore
 	prefix []byte
 }
 
 // NewPrefixStore creates a new PrefixStore.
-func NewPrefixStore(store Store, prefix string) *PrefixStore {
+func NewPrefixStore(store BadgerStore, prefix []byte) *PrefixStore {
 	return &PrefixStore{
 		base:   store,
-		prefix: []byte(prefix),
+		prefix: prefix,
 	}
 }
 
