@@ -9,13 +9,13 @@ import (
 // and return the actual values given a Store[*T].
 type LookupIterator[T any] struct {
 	store badgerutils.Store[T]
-	iter  badgerutils.Iterator[*badgerutils.Ref]
+	iter  badgerutils.Iterator[[]byte]
 }
 
 // Lookup creates a new lookup iterator.
 func Lookup[T any](
 	store badgerutils.Store[T],
-	iter badgerutils.Iterator[*badgerutils.Ref],
+	iter badgerutils.Iterator[[]byte],
 ) *LookupIterator[T] {
 	return &LookupIterator[T]{store: store, iter: iter}
 }
@@ -56,5 +56,5 @@ func (it *LookupIterator[T]) Value() (*T, error) {
 	if err != nil {
 		return nil, err
 	}
-	return it.store.Get(ref.Key)
+	return it.store.Get(ref)
 }

@@ -93,6 +93,7 @@ type Union[T, U any] struct {
 	U U
 }
 
+// UnionJoinFunc is a function that joins two items of different types into a Union.
 func UnionJoinFunc[T, U any](a T, aItem *badger.Item, b U, bItem *badger.Item) (Union[T, U], bool) {
 	return Union[T, U]{T: a, U: b}, true
 }

@@ -51,8 +51,7 @@ func TestRefStore(t *testing.T) {
 		refs, err := iters.Collect(iter)
 		require.NoError(t, err)
 		require.Len(t, refs, 1)
-		require.Equal(t, prefix, refs[0].Prefix)
-		require.Equal(t, key, refs[0].Key)
+		require.Equal(t, key, refs[0])
 	})
 
 	t.Run("Delete", func(t *testing.T) {
