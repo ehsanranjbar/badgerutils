@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	badger "github.com/dgraph-io/badger/v4"
-	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/iters"
+	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,7 +43,7 @@ func TestMap(t *testing.T) {
 
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
-	store := badgerutils.NewSerializedStore[StructA](txn)
+	store := sstore.New[StructA](txn)
 
 	var (
 		keys   = [][]byte{[]byte("foo1"), []byte("foo2")}

@@ -1,4 +1,4 @@
-package badgerutils
+package ref
 
 import (
 	"fmt"
@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
+	"github.com/ehsanranjbar/badgerutils"
+	"github.com/ehsanranjbar/badgerutils/iters"
 )
 
 // Ref is a reference to a key in the store.
@@ -22,38 +24,38 @@ type RefEntry struct {
 }
 
 // NewRefEntry creates a new RefEntry
-func NewRefEntry(prefix []byte) *RefEntry {
-	return &RefEntry{
+func NewRefEntry(prefix []byte) RefEntry {
+	return RefEntry{
 		Prefix: prefix,
 	}
 }
 
 // WithValue sets the value of the RefEntry
-func (e *RefEntry) WithValue(value []byte) *RefEntry {
+func (e RefEntry) WithValue(value []byte) RefEntry {
 	e.OptionalValue = value
 	return e
 }
 
 // WithTTL sets the TTL of the RefEntry
-func (e *RefEntry) WithTTL(ttl time.Duration) *RefEntry {
+func (e RefEntry) WithTTL(ttl time.Duration) RefEntry {
 	e.TTL = ttl
 	return e
 }
 
-// RefStore is a store that works with serialized values and also keeps track of multiple secondary indexes.
-type RefStore struct {
-	base BadgerStore
+// Store is a store that works with serialized values and also keeps track of multiple secondary indexes.
+type Store struct {
+	base badgerutils.BadgerStore
 }
 
-// NewRefStore creates a new RefStore
-func NewRefStore(base BadgerStore) *RefStore {
-	return &RefStore{
+// New creates a new RefStore
+func New(base badgerutils.BadgerStore) *Store {
+	return &Store{
 		base: base,
 	}
 }
 
 // Delete deletes all items from the store that have the given prefix
-func (s *RefStore) Delete(prefix []byte) error {
+func (s *Store) Delete(prefix []byte) error {
 	iter := s.base.NewIterator(badger.IteratorOptions{
 		Prefix:         prefix,
 		PrefetchValues: false,
@@ -70,19 +72,22 @@ func (s *RefStore) Delete(prefix []byte) error {
 }
 
 // Get gets a Ref given its whole key
-func (s *RefStore) Get(key []byte) (*Ref, error) {
-	_, ref, err := s.GetWithItem(key)
+func (s *Store) Get(prefix []byte) (*Ref, error) {
+	_, ref, err := s.GetWithItem(prefix)
 	return ref, err
 }
 
 // GetWithItem gets a Ref given its whole key and also returns the *badger.Item
-func (s *RefStore) GetWithItem(key []byte) (*badger.Item, *Ref, error) {
-	item, err := s.base.Get(key)
+func (s *Store) GetWithItem(prefix []byte) (*badger.Item, *Ref, error) {
+	iter := s.base.NewIterator(badger.IteratorOptions{
+		Prefix:         prefix,
+		PrefetchValues: false,
+	})
+	defer iter.Close()
+
+	item, err := iters.FirstItem(iter)
 	if err != nil {
 		return nil, nil, err
-	}
-	if item == nil {
-		return nil, nil, nil
 	}
 
 	prefix, key := splitKey(item.Key(), item.UserMeta())
@@ -97,7 +102,7 @@ func splitKey(key []byte, keyLen uint8) (prefix, k []byte) {
 }
 
 // NewIterator creates a new reference iterator
-func (s *RefStore) NewIterator(opts badger.IteratorOptions) Iterator[[]byte] {
+func (s *Store) NewIterator(opts badger.IteratorOptions) badgerutils.Iterator[[]byte] {
 	return &refIterator{
 		base: s.base.NewIterator(opts),
 	}
@@ -149,7 +154,7 @@ func (i *refIterator) Value() ([]byte, error) {
 }
 
 // Set sets a Ref in the store
-func (s *RefStore) Set(key []byte, e *RefEntry) error {
+func (s *Store) Set(key []byte, e RefEntry) error {
 	if len(key) > math.MaxUint8 {
 		return fmt.Errorf("key is too long")
 	}

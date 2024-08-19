@@ -5,8 +5,10 @@ import (
 	"testing"
 
 	badger "github.com/dgraph-io/badger/v4"
-	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/iters"
+	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
+	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
+	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,8 +20,8 @@ func TestLookupIterator(t *testing.T) {
 
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
-	vstore := badgerutils.NewSerializedStore[StructA](badgerutils.NewPrefixStore(txn, []byte("v")))
-	rstore := badgerutils.NewRefStore(badgerutils.NewPrefixStore(txn, []byte("r")))
+	vstore := sstore.New[StructA](pstore.New(txn, []byte("v")))
+	rstore := refstore.New(pstore.New(txn, []byte("r")))
 
 	var (
 		keys   = [][]byte{[]byte("foo1"), []byte("foo2")}
@@ -30,7 +32,7 @@ func TestLookupIterator(t *testing.T) {
 		err := vstore.Set(key, values[i])
 		require.NoError(t, err)
 
-		err = rstore.Set(key, badgerutils.NewRefEntry(binary.AppendUvarint(nil, uint64(values[i].A))))
+		err = rstore.Set(key, refstore.NewRefEntry(binary.AppendUvarint(nil, uint64(values[i].A))))
 		require.NoError(t, err)
 	}
 

@@ -4,8 +4,9 @@ import (
 	"testing"
 
 	badger "github.com/dgraph-io/badger/v4"
-	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/iters"
+	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
+	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,8 +18,8 @@ func TestJoin(t *testing.T) {
 
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
-	aStore := badgerutils.NewSerializedStore[StructA](badgerutils.NewPrefixStore(txn, []byte("a")))
-	bStore := badgerutils.NewSerializedStore[StructB](badgerutils.NewPrefixStore(txn, []byte("b")))
+	aStore := sstore.New[StructA](pstore.New(txn, []byte("a")))
+	bStore := sstore.New[StructB](pstore.New(txn, []byte("b")))
 
 	var (
 		aKeys   = [][]byte{[]byte("foo1"), []byte("foo2")}

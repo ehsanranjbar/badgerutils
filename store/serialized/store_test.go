@@ -1,4 +1,4 @@
-package badgerutils_test
+package serialized_test
 
 import (
 	"encoding/json"
@@ -7,9 +7,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
+	"github.com/ehsanranjbar/badgerutils/store/serialized"
 	"github.com/stretchr/testify/require"
-
-	"github.com/ehsanranjbar/badgerutils"
 )
 
 type TestStruct struct {
@@ -51,8 +50,8 @@ func TestSerializedStore(t *testing.T) {
 
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
-	store := badgerutils.NewSerializedStore[TestStruct](txn)
-	failStore := badgerutils.NewSerializedStore[FailStruct](txn)
+	store := serialized.New[TestStruct](txn)
+	failStore := serialized.New[FailStruct](txn)
 
 	var (
 		key   = []byte("foo")
@@ -108,7 +107,7 @@ func TestSerializedIterator(t *testing.T) {
 
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
-	store := badgerutils.NewSerializedStore[TestStruct](txn)
+	store := serialized.New[TestStruct](txn)
 
 	var (
 		keys   = [][]byte{[]byte("foo1"), []byte("foo2")}

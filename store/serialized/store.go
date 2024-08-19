@@ -1,10 +1,11 @@
-package badgerutils
+package serialized
 
 import (
 	"encoding"
 	"time"
 
 	badger "github.com/dgraph-io/badger/v4"
+	"github.com/ehsanranjbar/badgerutils"
 )
 
 // BinarySerializable is a serialized item.
@@ -13,40 +14,40 @@ type BinarySerializable interface {
 	encoding.BinaryUnmarshaler
 }
 
-// SerializedStore is a store that serializes all keys and values.
-type SerializedStore[T any, PT interface {
+// Store is a store that serializes all keys and values.
+type Store[T any, PT interface {
 	BinarySerializable
 	*T
 }] struct {
-	base BadgerStore
+	base badgerutils.BadgerStore
 }
 
-// NewSerializedStore creates a new serialized store.
-func NewSerializedStore[T any, PT interface {
+// New creates a new serialized store.
+func New[T any, PT interface {
 	BinarySerializable
 	*T
-}](base BadgerStore) *SerializedStore[T, PT] {
-	return &SerializedStore[T, PT]{base: base}
+}](base badgerutils.BadgerStore) *Store[T, PT] {
+	return &Store[T, PT]{base: base}
 }
 
 // Delete deletes the key from the store.
-func (s *SerializedStore[T, PT]) Delete(key []byte) error {
+func (s *Store[T, PT]) Delete(key []byte) error {
 	return s.base.Delete(key)
 }
 
 // Get gets the value of the key from the store and unmarshal it.
-func (s *SerializedStore[T, PT]) Get(key []byte) (value *T, err error) {
+func (s *Store[T, PT]) Get(key []byte) (value *T, err error) {
 	_, value, err = s.GetWithItem(key)
 	return value, err
 }
 
 // NewIterator creates a new iterator.
-func (s *SerializedStore[T, PT]) NewIterator(opts badger.IteratorOptions) Iterator[*T] {
+func (s *Store[T, PT]) NewIterator(opts badger.IteratorOptions) badgerutils.Iterator[*T] {
 	return NewSerializedIterator[T, PT](s.base.NewIterator(opts))
 }
 
 // GetWithItem is similar to Get, but it also returns the badger.Item as well.
-func (s *SerializedStore[T, PT]) GetWithItem(key []byte) (item *badger.Item, value *T, err error) {
+func (s *Store[T, PT]) GetWithItem(key []byte) (item *badger.Item, value *T, err error) {
 	item, err = s.base.Get(key)
 	if err != nil {
 		return nil, nil, err
@@ -71,7 +72,7 @@ type MetaBearer interface {
 // Set marshals the value as binary and sets it to the key.
 // If the value implements TemporaryItem, it will set the TTL.
 // If the value implements MetaBearer, it will set the meta byte.
-func (s *SerializedStore[T, PT]) Set(key []byte, value *T) error {
+func (s *Store[T, PT]) Set(key []byte, value *T) error {
 	var (
 		data []byte
 		err  error

@@ -1,12 +1,11 @@
-package badgerutils_test
+package prefix_test
 
 import (
 	"testing"
 
 	badger "github.com/dgraph-io/badger/v4"
+	"github.com/ehsanranjbar/badgerutils/store/prefix"
 	"github.com/stretchr/testify/require"
-
-	"github.com/ehsanranjbar/badgerutils"
 )
 
 func TestPrefixStore(t *testing.T) {
@@ -17,7 +16,7 @@ func TestPrefixStore(t *testing.T) {
 
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
-	store := badgerutils.NewPrefixStore(txn, []byte("prefix"))
+	store := prefix.New(txn, []byte("prefix"))
 
 	var (
 		key   = []byte("foo")

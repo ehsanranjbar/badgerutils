@@ -1,11 +1,11 @@
-package badgerutils_test
+package ref_test
 
 import (
 	"testing"
 
 	badger "github.com/dgraph-io/badger/v4"
-	badgerutils "github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/iters"
+	"github.com/ehsanranjbar/badgerutils/store/ref"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,7 +17,7 @@ func TestRefStore(t *testing.T) {
 
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
-	store := badgerutils.NewRefStore(txn)
+	store := ref.New(txn)
 
 	var (
 		prefix = []byte("prefix")
@@ -26,7 +26,7 @@ func TestRefStore(t *testing.T) {
 	)
 
 	t.Run("Set", func(t *testing.T) {
-		err := store.Set(key, badgerutils.NewRefEntry(prefix).WithValue(value))
+		err := store.Set(key, ref.NewRefEntry(prefix).WithValue(value))
 		require.NoError(t, err)
 	})
 
