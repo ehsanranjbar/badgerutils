@@ -20,26 +20,28 @@ func TestRefStore(t *testing.T) {
 	store := ref.New(txn)
 
 	var (
-		prefix = []byte("prefix")
-		key    = []byte("foo")
-		value  = []byte("bar")
+		prefixes = [][]byte{[]byte("a"), []byte("b"), []byte("c")}
+		keys     = [][]byte{{3}, {2}, {1}}
+		value    = []byte("foo")
 	)
 
 	t.Run("Set", func(t *testing.T) {
-		err := store.Set(key, ref.NewRefEntry(prefix).WithValue(value))
-		require.NoError(t, err)
+		for i, key := range keys {
+			err := store.Set(key, ref.NewRefEntry(prefixes[i]).WithValue(value))
+			require.NoError(t, err)
+		}
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		ref, err := store.Get(append(prefix, key...))
-		require.NoError(t, err)
-		require.NotNil(t, ref)
-		require.Equal(t, prefix, ref.Prefix)
-		require.Equal(t, key, ref.Key)
+		for i, p := range prefixes {
+			k, err := store.Get(p)
+			require.NoError(t, err)
+			require.Equal(t, keys[i], k)
+		}
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
-		v, err := store.Get(key)
+		v, err := store.Get([]byte("d"))
 		require.Error(t, err)
 		require.Nil(t, v)
 	})
@@ -48,14 +50,20 @@ func TestRefStore(t *testing.T) {
 		iter := store.NewIterator(badger.DefaultIteratorOptions)
 		defer iter.Close()
 
-		refs, err := iters.Collect(iter)
+		actual, err := iters.Collect(iter)
 		require.NoError(t, err)
-		require.Len(t, refs, 1)
-		require.Equal(t, key, refs[0])
+		require.Len(t, actual, 3)
+		require.Equal(t, []byte{3}, actual[0])
+		require.Equal(t, []byte{2}, actual[1])
+		require.Equal(t, []byte{1}, actual[2])
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		err := store.Delete(append(prefix, key...))
+		err := store.Delete(prefixes[0])
 		require.NoError(t, err)
+
+		v, err := store.Get(prefixes[0])
+		require.Error(t, err)
+		require.Nil(t, v)
 	})
 }

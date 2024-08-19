@@ -8,11 +8,11 @@ import (
 // MapIterator is an iterator that maps the value from T to U.
 type MapIterator[T, U any] struct {
 	base badgerutils.Iterator[T]
-	f    func(T) U
+	f    func(T, *badger.Item) (U, error)
 }
 
 // Map creates a new map iterator.
-func Map[T, U any](base badgerutils.Iterator[T], f func(T) U) *MapIterator[T, U] {
+func Map[T, U any](base badgerutils.Iterator[T], f func(T, *badger.Item) (U, error)) *MapIterator[T, U] {
 	return &MapIterator[T, U]{base: base, f: f}
 }
 
@@ -52,5 +52,5 @@ func (it *MapIterator[T, U]) Value() (value U, err error) {
 	if err != nil {
 		return value, err
 	}
-	return it.f(v), nil
+	return it.f(v, it.base.Item())
 }
