@@ -8,25 +8,19 @@ import (
 	"github.com/ehsanranjbar/badgerutils"
 )
 
-// BinarySerializable is a serialized item.
-type BinarySerializable interface {
-	encoding.BinaryMarshaler
+// PointerBinaryUnmarshaler is an interface that unmarshals a binary data.
+type PointerBinaryUnmarshaler[T any] interface {
 	encoding.BinaryUnmarshaler
+	*T
 }
 
 // Store is a store that serializes all keys and values.
-type Store[T any, PT interface {
-	BinarySerializable
-	*T
-}] struct {
+type Store[T encoding.BinaryMarshaler, PT PointerBinaryUnmarshaler[T]] struct {
 	base badgerutils.BadgerStore
 }
 
 // New creates a new serialized store.
-func New[T any, PT interface {
-	BinarySerializable
-	*T
-}](base badgerutils.BadgerStore) *Store[T, PT] {
+func New[T encoding.BinaryMarshaler, PT PointerBinaryUnmarshaler[T]](base badgerutils.BadgerStore) *Store[T, PT] {
 	return &Store[T, PT]{base: base}
 }
 
@@ -78,7 +72,7 @@ func (s *Store[T, PT]) Set(key []byte, value *T) error {
 		err  error
 	)
 	if value != nil {
-		data, err = (PT)(value).MarshalBinary()
+		data, err = (*value).MarshalBinary()
 		if err != nil {
 			return err
 		}
@@ -97,19 +91,13 @@ func (s *Store[T, PT]) Set(key []byte, value *T) error {
 }
 
 // SerializedIterator is an iterator that unmarshal the value.
-type SerializedIterator[T any, PT interface {
-	BinarySerializable
-	*T
-}] struct {
+type SerializedIterator[T any, PT PointerBinaryUnmarshaler[T]] struct {
 	base        *badger.Iterator
 	cachedValue *T
 }
 
 // NewSerializedIterator creates a new serialized iterator.
-func NewSerializedIterator[T any, PT interface {
-	BinarySerializable
-	*T
-}](base *badger.Iterator) *SerializedIterator[T, PT] {
+func NewSerializedIterator[T any, PT PointerBinaryUnmarshaler[T]](base *badger.Iterator) *SerializedIterator[T, PT] {
 	return &SerializedIterator[T, PT]{base: base}
 }
 
@@ -158,6 +146,9 @@ func (it *SerializedIterator[T, PT]) Value() (value *T, err error) {
 	}
 	v := PT(new(T))
 	err = item.Value(func(val []byte) error {
+		if len(val) == 0 {
+			return nil
+		}
 		return v.UnmarshalBinary(val)
 	})
 	it.cachedValue = (*T)(v)
