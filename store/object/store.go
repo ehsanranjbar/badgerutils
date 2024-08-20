@@ -7,6 +7,7 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
+	"github.com/ehsanranjbar/badgerutils/indexing"
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
 	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
@@ -17,11 +18,6 @@ var (
 	istorePrefix = []byte("i")
 )
 
-// Indexer is an indexer.
-type Indexer[T any] interface {
-	Index(v *T, update bool) map[string]refstore.RefEntry
-}
-
 // Store is a store that stores objects.
 type Store[V any, PV interface {
 	sstore.BinarySerializable
@@ -29,7 +25,7 @@ type Store[V any, PV interface {
 }] struct {
 	vstore  *sstore.Store[V, PV]
 	istore  badgerutils.BadgerStore
-	indexer Indexer[V]
+	indexer indexing.Indexer[V]
 }
 
 // New creates a new ObjectStore.
@@ -38,7 +34,7 @@ func New[V any, PV interface {
 	*V
 }](
 	base badgerutils.BadgerStore,
-	indexer Indexer[V],
+	indexer indexing.Indexer[V],
 ) *Store[V, PV] {
 	return &Store[V, PV]{
 		vstore:  sstore.New[V, PV](pstore.New(base, vstorePrefix)),
@@ -68,10 +64,10 @@ func (s *Store[V, PV]) deleteRefs(key []byte) error {
 		return fmt.Errorf("failed to get object: %w", err)
 	}
 
-	refs := s.indexer.Index(obj, false)
-	for name, ref := range refs {
+	idxs := s.indexer.Index(obj, false)
+	for name, idx := range idxs {
 		rs := refstore.New(pstore.New(s.istore, []byte(name)))
-		err := rs.Delete(append(ref.Prefix, key...))
+		err := rs.Delete(append(idx.Key, key...))
 		if err != nil {
 			return fmt.Errorf("failed to delete ref: %w", err)
 		}
@@ -134,10 +130,10 @@ func (s *Store[V, PV]) setRefs(key []byte, obj *V) error {
 		ttl = ti.TTL()
 	}
 
-	refs := s.indexer.Index(obj, true)
-	for name, ref := range refs {
+	idxs := s.indexer.Index(obj, true)
+	for name, idx := range idxs {
 		rs := refstore.New(pstore.New(s.istore, []byte(name)))
-		err := rs.Set(key, ref.WithTTL(ttl))
+		err := rs.Set(key, refstore.NewRefEntry(idx.Key).WithTTL(ttl))
 		if err != nil {
 			return fmt.Errorf("failed to set ref: %w", err)
 		}

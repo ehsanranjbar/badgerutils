@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	badger "github.com/dgraph-io/badger/v4"
+	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	objstore "github.com/ehsanranjbar/badgerutils/store/object"
-	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,14 +27,14 @@ func (t *TestStruct) UnmarshalBinary(data []byte) error {
 
 type TestIndexer struct{}
 
-func (i TestIndexer) Index(v *TestStruct, update bool) map[string]refstore.RefEntry {
+func (i TestIndexer) Index(v *TestStruct, update bool) map[string]badgerutils.RawKVPair {
 	if v == nil {
 		return nil
 	}
 
-	return map[string]refstore.RefEntry{
-		"A_idx": refstore.NewRefEntry(binary.LittleEndian.AppendUint64(nil, uint64(-v.A))),
-		"B_idx": refstore.NewRefEntry([]byte(v.B)),
+	return map[string]badgerutils.RawKVPair{
+		"A_idx": badgerutils.NewRawKVPair(binary.LittleEndian.AppendUint64(nil, uint64(-v.A)), nil),
+		"B_idx": badgerutils.NewRawKVPair([]byte(v.B), nil),
 	}
 }
 
@@ -110,7 +110,7 @@ func TestObjectStore(t *testing.T) {
 		actual, err := iters.Collect(iter)
 		require.NoError(t, err)
 		require.Len(t, actual, len(keys))
-		require.Equal(t, []int{3, 2, 1}, actual)
+		require.Equal(t, [][]byte{{3}, {2}, {1}}, actual)
 	})
 
 	t.Run("Delete", func(t *testing.T) {

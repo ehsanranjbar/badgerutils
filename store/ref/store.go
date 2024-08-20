@@ -1,6 +1,7 @@
 package ref
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"time"
@@ -84,12 +85,12 @@ func (s *Store) GetWithItem(prefix []byte) (*badger.Item, []byte, error) {
 		return nil, nil, err
 	}
 
-	_, key := splitKey(item.Key(), item.UserMeta())
+	key := extractKey(item.Key(), item.UserMeta())
 	return item, key, nil
 }
 
-func splitKey(key []byte, keyLen uint8) (prefix, k []byte) {
-	return key[:len(key)-int(keyLen)], key[len(key)-int(keyLen):]
+func extractKey(bz []byte, keyLen uint8) []byte {
+	return bz[len(bz)-int(keyLen):]
 }
 
 // NewIterator creates a new reference iterator
@@ -140,8 +141,8 @@ func (i *refIterator) Value() ([]byte, error) {
 		return nil, nil
 	}
 
-	_, key := splitKey(item.Key(), item.UserMeta())
-	return key, nil
+	key := extractKey(item.Key(), item.UserMeta())
+	return bytes.Clone(key), nil
 }
 
 // Set sets a Ref in the store

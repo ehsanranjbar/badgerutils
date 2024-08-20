@@ -5,21 +5,21 @@ import (
 	"testing"
 
 	badger "github.com/dgraph-io/badger/v4"
+	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	objstore "github.com/ehsanranjbar/badgerutils/store/object"
-	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
 	"github.com/stretchr/testify/require"
 )
 
 type TestIndexer struct{}
 
-func (i TestIndexer) Index(v *StructA, update bool) map[string]refstore.RefEntry {
+func (i TestIndexer) Index(v *StructA, update bool) map[string]badgerutils.RawKVPair {
 	if v == nil {
 		return nil
 	}
 
-	return map[string]refstore.RefEntry{
-		"A_idx": refstore.NewRefEntry(binary.LittleEndian.AppendUint64(nil, uint64(v.A))),
+	return map[string]badgerutils.RawKVPair{
+		"A_idx": badgerutils.NewRawKVPair(binary.LittleEndian.AppendUint64(nil, uint64(v.A)), nil),
 	}
 }
 
