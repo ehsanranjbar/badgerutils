@@ -46,10 +46,10 @@ func TestObjectStore(t *testing.T) {
 
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
-	store := objstore.New[int](txn, &TestIndexer{})
+	store := objstore.New(txn, &TestIndexer{})
 
 	var (
-		keys    = []int{1, 2, 3}
+		keys    = [][]byte{{1}, {2}, {3}}
 		objects = []*TestStruct{
 			{A: 1, B: "foo"},
 			{A: 2, B: "bar"},

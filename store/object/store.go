@@ -3,10 +3,10 @@ package object
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
-	"github.com/ehsanranjbar/badgerutils/iters"
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
 	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
@@ -23,42 +23,38 @@ type Indexer[T any] interface {
 }
 
 // Store is a store that stores objects.
-type Store[K any, V any, PV interface {
+type Store[V any, PV interface {
 	sstore.BinarySerializable
 	*V
 }] struct {
 	vstore  *sstore.Store[V, PV]
 	istore  badgerutils.BadgerStore
 	indexer Indexer[V]
-	ks      keySerializer[K]
 }
 
 // New creates a new ObjectStore.
-func New[K any, V any, PV interface {
+func New[V any, PV interface {
 	sstore.BinarySerializable
 	*V
 }](
 	base badgerutils.BadgerStore,
 	indexer Indexer[V],
-) *Store[K, V, PV] {
-	return &Store[K, V, PV]{
+) *Store[V, PV] {
+	return &Store[V, PV]{
 		vstore:  sstore.New[V, PV](pstore.New(base, vstorePrefix)),
 		istore:  pstore.New(base, istorePrefix),
 		indexer: indexer,
-		ks:      newKeySerializer[K](),
 	}
 }
 
 // Delete deletes an object along with all it's auxiliary references (i.e. secondary indexes).
-func (s *Store[K, V, PV]) Delete(key K) error {
-	keyBz := s.ks.Marshal(key)
-
-	err := s.deleteRefs(keyBz)
+func (s *Store[V, PV]) Delete(key []byte) error {
+	err := s.deleteRefs(key)
 	if err != nil {
 		return fmt.Errorf("failed to delete refs: %w", err)
 	}
 
-	err = s.vstore.Delete(keyBz)
+	err = s.vstore.Delete(key)
 	if err != nil {
 		return fmt.Errorf("failed to delete object: %w", err)
 	}
@@ -66,7 +62,7 @@ func (s *Store[K, V, PV]) Delete(key K) error {
 	return nil
 }
 
-func (s *Store[K, V, PV]) deleteRefs(key []byte) error {
+func (s *Store[V, PV]) deleteRefs(key []byte) error {
 	obj, err := s.vstore.Get(key)
 	if err != nil {
 		return fmt.Errorf("failed to get object: %w", err)
@@ -85,14 +81,12 @@ func (s *Store[K, V, PV]) deleteRefs(key []byte) error {
 }
 
 // Get gets an object given it's key.
-func (s *Store[K, V, PV]) Get(key K) (*V, error) {
-	keyBz := s.ks.Marshal(key)
-
-	return s.vstore.Get(keyBz)
+func (s *Store[V, PV]) Get(key []byte) (*V, error) {
+	return s.vstore.Get(key)
 }
 
 // GetByRef gets an object given it's index name and prefix.
-func (s *Store[K, V, PV]) GetByRef(index string, prefix []byte) (*V, error) {
+func (s *Store[V, PV]) GetByRef(index string, prefix []byte) (*V, error) {
 	rs := refstore.New(pstore.New(s.istore, []byte(index)))
 
 	key, err := rs.Get(prefix)
@@ -104,35 +98,29 @@ func (s *Store[K, V, PV]) GetByRef(index string, prefix []byte) (*V, error) {
 }
 
 // NewIterator creates a new iterator over the objects.
-func (s *Store[K, V, PV]) NewIterator(opts badger.IteratorOptions) badgerutils.Iterator[*V] {
+func (s *Store[V, PV]) NewIterator(opts badger.IteratorOptions) badgerutils.Iterator[*V] {
 	return s.vstore.NewIterator(opts)
 }
 
 // NewRefIterator creates a new iterator over an index.
-func (s *Store[K, V, PV]) NewRefIterator(index string, opts badger.IteratorOptions) badgerutils.Iterator[K] {
-	rs := refstore.New(pstore.New(s.istore, []byte(index)))
-
-	return iters.Map(rs.NewIterator(opts), func(key []byte, _ *badger.Item) (K, error) {
-		return s.ks.Unmarshal(key), nil
-	})
+func (s *Store[V, PV]) NewRefIterator(index string, opts badger.IteratorOptions) badgerutils.Iterator[[]byte] {
+	return refstore.New(pstore.New(s.istore, []byte(index))).NewIterator(opts)
 }
 
 // Set inserts the object into the store as a new object or updates an existing object
 // along with inserting/updating all it's auxiliary references (i.e. secondary indexes).
-func (s *Store[K, V, PV]) Set(key K, obj *V) error {
-	keyBz := s.ks.Marshal(key)
-
-	err := s.deleteRefs(keyBz)
+func (s *Store[V, PV]) Set(key []byte, obj *V) error {
+	err := s.deleteRefs(key)
 	if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
 		return fmt.Errorf("failed to delete old refs: %w", err)
 	}
 
-	err = s.vstore.Set(keyBz, obj)
+	err = s.vstore.Set(key, obj)
 	if err != nil {
 		return fmt.Errorf("failed to set object: %w", err)
 	}
 
-	err = s.setRefs(keyBz, obj)
+	err = s.setRefs(key, obj)
 	if err != nil {
 		return fmt.Errorf("failed to set refs: %w", err)
 	}
@@ -140,11 +128,16 @@ func (s *Store[K, V, PV]) Set(key K, obj *V) error {
 	return nil
 }
 
-func (s *Store[K, V, PV]) setRefs(key []byte, obj *V) error {
+func (s *Store[V, PV]) setRefs(key []byte, obj *V) error {
+	var ttl time.Duration
+	if ti, ok := any(obj).(sstore.TemporaryItem); ok {
+		ttl = ti.TTL()
+	}
+
 	refs := s.indexer.Index(obj, true)
 	for name, ref := range refs {
 		rs := refstore.New(pstore.New(s.istore, []byte(name)))
-		err := rs.Set(key, ref)
+		err := rs.Set(key, ref.WithTTL(ttl))
 		if err != nil {
 			return fmt.Errorf("failed to set ref: %w", err)
 		}

@@ -31,10 +31,10 @@ func TestLookupIterator(t *testing.T) {
 
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
-	store := objstore.New[int](txn, &TestIndexer{})
+	store := objstore.New(txn, &TestIndexer{})
 
 	var (
-		keys   = []int{1, 2}
+		keys   = [][]byte{{1}, {2}}
 		values = []*StructA{{A: 1}, {A: 2}}
 	)
 
