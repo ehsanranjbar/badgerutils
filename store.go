@@ -15,9 +15,14 @@ type Store[T any] interface {
 // BadgerStore is a store that *badger.Txn is compatible with it
 // and has the SetEntry operation which is mandatory for some low-level stores like PrefixStore and SerializedStore.
 type BadgerStore interface {
+	ReadBadgerStore
 	Delete(key []byte) error
-	Get(key []byte) (v *badger.Item, err error)
-	NewIterator(opts badger.IteratorOptions) *badger.Iterator
 	Set(key, value []byte) error
 	SetEntry(e *badger.Entry) error
+}
+
+// ReadBadgerStore is a store that only satisfies the read operations of a *badger.Txn.
+type ReadBadgerStore interface {
+	Get(key []byte) (v *badger.Item, err error)
+	NewIterator(opts badger.IteratorOptions) *badger.Iterator
 }
