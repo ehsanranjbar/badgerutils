@@ -18,6 +18,11 @@ func TestPrefixStore(t *testing.T) {
 	defer txn.Discard()
 	store := prefix.New(txn, []byte("prefix"))
 
+	t.Run("Prefix", func(t *testing.T) {
+		require.Equal(t, []byte("prefix"), store.Prefix())
+		require.Equal(t, []byte("prefixfoo"), prefix.New(store, []byte("foo")).Prefix())
+	})
+
 	var (
 		key   = []byte("foo")
 		value = []byte("bar")

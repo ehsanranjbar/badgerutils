@@ -52,6 +52,11 @@ func (it *LimitIterator[T]) Valid() bool {
 	return it.i < it.n && it.base.Valid()
 }
 
+// Key implements the Iterator interface.
+func (it *LimitIterator[T]) Key() []byte {
+	return it.base.Key()
+}
+
 // Value implements the Iterator interface.
 func (it *LimitIterator[T]) Value() (value T, err error) {
 	return it.base.Value()

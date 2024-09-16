@@ -7,19 +7,19 @@ import (
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/iters"
-	objstore "github.com/ehsanranjbar/badgerutils/store/object"
+	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
 	"github.com/stretchr/testify/require"
 )
 
 type TestIndexer struct{}
 
-func (i TestIndexer) Index(v *StructA, update bool) map[string]badgerutils.RawKVPair {
+func (i TestIndexer) Index(v *StructA, update bool) []badgerutils.RawKVPair {
 	if v == nil {
 		return nil
 	}
 
-	return map[string]badgerutils.RawKVPair{
-		"A_idx": badgerutils.NewRawKVPair(binary.LittleEndian.AppendUint64(nil, uint64(v.A)), nil),
+	return []badgerutils.RawKVPair{
+		badgerutils.NewRawKVPair(append([]byte("A_idx"), binary.LittleEndian.AppendUint64(nil, uint64(v.A))...), nil),
 	}
 }
 
@@ -31,7 +31,7 @@ func TestLookupIterator(t *testing.T) {
 
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
-	store := objstore.New(txn, &TestIndexer{})
+	store := sstore.New[StructA](txn)
 
 	var (
 		keys   = [][]byte{{1}, {2}}
@@ -43,7 +43,7 @@ func TestLookupIterator(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	iter := iters.Lookup(store, store.NewRefIterator("A_idx", badger.DefaultIteratorOptions))
+	iter := iters.Lookup(store, iters.Slice(keys))
 	defer iter.Close()
 
 	actual, err := iters.Collect(iter)

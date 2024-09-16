@@ -8,6 +8,7 @@ import (
 // which is used in pretty much all high-level stuff of this package because we mostly work with serialized values.
 type Iterator[T any] interface {
 	BadgerIterator
+	Key() []byte
 	Value() (value T, err error)
 }
 

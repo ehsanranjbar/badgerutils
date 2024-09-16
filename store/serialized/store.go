@@ -6,6 +6,7 @@ import (
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
+	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 )
 
 // PointerBinaryUnmarshaler is an interface that unmarshals a binary data.
@@ -24,6 +25,19 @@ func New[T encoding.BinaryMarshaler, PT PointerBinaryUnmarshaler[T]](base badger
 	return &Store[T, PT]{base: base}
 }
 
+// Prefix returns the prefix of the store.
+func (s *Store[T, PT]) Prefix() []byte {
+	if pfx, ok := s.base.(prefixed); ok {
+		return pfx.Prefix()
+	}
+
+	return nil
+}
+
+type prefixed interface {
+	Prefix() []byte
+}
+
 // Delete deletes the key from the store.
 func (s *Store[T, PT]) Delete(key []byte) error {
 	return s.base.Delete(key)
@@ -37,7 +51,12 @@ func (s *Store[T, PT]) Get(key []byte) (value *T, err error) {
 
 // NewIterator creates a new iterator.
 func (s *Store[T, PT]) NewIterator(opts badger.IteratorOptions) badgerutils.Iterator[*T] {
-	return NewSerializedIterator[T, PT](s.base.NewIterator(opts))
+	var iter badgerutils.BadgerIterator = s.base.NewIterator(opts)
+	if pfx := s.Prefix(); pfx != nil {
+		iter = pstore.NewIterator(iter, pfx)
+	}
+
+	return NewIterator[T, PT](iter)
 }
 
 // GetWithItem is similar to Get, but it also returns the badger.Item as well.
@@ -88,69 +107,4 @@ func (s *Store[T, PT]) Set(key []byte, value *T) error {
 	}
 
 	return s.base.SetEntry(entry)
-}
-
-// SerializedIterator is an iterator that unmarshal the value.
-type SerializedIterator[T any, PT PointerBinaryUnmarshaler[T]] struct {
-	base        *badger.Iterator
-	cachedValue *T
-}
-
-// NewSerializedIterator creates a new serialized iterator.
-func NewSerializedIterator[T any, PT PointerBinaryUnmarshaler[T]](base *badger.Iterator) *SerializedIterator[T, PT] {
-	return &SerializedIterator[T, PT]{base: base}
-}
-
-// Close closes the iterator.
-func (it *SerializedIterator[T, PT]) Close() {
-	it.base.Close()
-}
-
-// Item returns the current item.
-func (it *SerializedIterator[T, PT]) Item() *badger.Item {
-	return it.base.Item()
-}
-
-// Key returns the current key.
-func (it *SerializedIterator[T, PT]) Next() {
-	it.base.Next()
-	it.cachedValue = nil
-}
-
-// Rewind rewinds the iterator.
-func (it *SerializedIterator[T, PT]) Rewind() {
-	it.base.Rewind()
-	it.cachedValue = nil
-}
-
-// Seek seeks the key.
-func (it *SerializedIterator[T, PT]) Seek(key []byte) {
-	it.base.Seek(key)
-	it.cachedValue = nil
-}
-
-// Valid returns if the iterator is valid.
-func (it *SerializedIterator[T, PT]) Valid() bool {
-	return it.base.Valid()
-}
-
-// Value returns the current value unmarshaled as T
-func (it *SerializedIterator[T, PT]) Value() (value *T, err error) {
-	if it.cachedValue != nil {
-		return it.cachedValue, nil
-	}
-
-	item := it.base.Item()
-	if item == nil {
-		return nil, nil
-	}
-	v := PT(new(T))
-	err = item.Value(func(val []byte) error {
-		if len(val) == 0 {
-			return nil
-		}
-		return v.UnmarshalBinary(val)
-	})
-	it.cachedValue = (*T)(v)
-	return it.cachedValue, err
 }

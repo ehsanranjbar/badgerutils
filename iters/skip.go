@@ -54,6 +54,11 @@ func (it *SkipIterator[T]) Valid() bool {
 	return it.base.Valid()
 }
 
+// Key implements the Iterator interface.
+func (it *SkipIterator[T]) Key() []byte {
+	return it.base.Key()
+}
+
 // Value implements the Iterator interface.
 func (it *SkipIterator[T]) Value() (value T, err error) {
 	return it.base.Value()

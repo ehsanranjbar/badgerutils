@@ -19,6 +19,18 @@ func New(store badgerutils.BadgerStore, prefix []byte) *Store {
 	}
 }
 
+// Prefix returns the prefix of the store.
+func (s *Store) Prefix() []byte {
+	if pfx, ok := s.base.(prefixed); ok {
+		return append(pfx.Prefix(), s.prefix...)
+	}
+	return s.prefix
+}
+
+type prefixed interface {
+	Prefix() []byte
+}
+
 // Delete deletes the key from the store.
 func (s *Store) Delete(key []byte) error {
 	return s.base.Delete(append(s.prefix, key...))

@@ -70,6 +70,11 @@ func (it *FilterIterator[T]) Valid() bool {
 	return it.f(v, it.Item())
 }
 
+// Key implements the Iterator interface.
+func (it *FilterIterator[T]) Key() []byte {
+	return it.base.Key()
+}
+
 // Value implements the Iterator interface.
 func (it *FilterIterator[T]) Value() (value T, err error) {
 	return it.base.Value()

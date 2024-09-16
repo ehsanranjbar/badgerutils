@@ -46,6 +46,11 @@ func (it *MapIterator[T, U]) Valid() bool {
 	return it.base.Valid()
 }
 
+// Key implements the Iterator interface.
+func (it *MapIterator[T, U]) Key() []byte {
+	return it.base.Key()
+}
+
 // Value implements the Iterator interface.
 func (it *MapIterator[T, U]) Value() (value U, err error) {
 	v, err := it.base.Value()

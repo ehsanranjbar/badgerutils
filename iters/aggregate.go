@@ -9,12 +9,12 @@ import (
 // interfering with the base iterator.
 type AggregateIterator[T any, S any] struct {
 	base  badgerutils.Iterator[T]
-	state *S
-	f     func(*S, T, *badger.Item) *S
+	state S
+	f     func(S, T, *badger.Item) S
 }
 
 // Aggregate creates a new aggregate iterator.
-func Aggregate[T any, S any](base badgerutils.Iterator[T], f func(*S, T, *badger.Item) *S) *AggregateIterator[T, S] {
+func Aggregate[T any, S any](base badgerutils.Iterator[T], f func(S, T, *badger.Item) S) *AggregateIterator[T, S] {
 	return &AggregateIterator[T, S]{base: base, f: f}
 }
 
@@ -49,14 +49,16 @@ func (it *AggregateIterator[T, S]) update() {
 // Rewind implements the Iterator interface.
 func (it *AggregateIterator[T, S]) Rewind() {
 	it.base.Rewind()
-	it.state = nil
+	var s S
+	it.state = s
 	it.update()
 }
 
 // Seek implements the Iterator interface.
 func (it *AggregateIterator[T, S]) Seek(key []byte) {
 	it.base.Seek(key)
-	it.state = nil
+	var s S
+	it.state = s
 	it.update()
 }
 
@@ -65,12 +67,16 @@ func (it *AggregateIterator[T, S]) Valid() bool {
 	return it.base.Valid()
 }
 
+func (it *AggregateIterator[T, S]) Key() []byte {
+	return it.base.Key()
+}
+
 // Value implements the Iterator interface.
 func (it *AggregateIterator[T, S]) Value() (value T, err error) {
 	return it.base.Value()
 }
 
 // Result returns the aggregated result.
-func (it *AggregateIterator[T, S]) Result() *S {
+func (it *AggregateIterator[T, S]) Result() S {
 	return it.state
 }

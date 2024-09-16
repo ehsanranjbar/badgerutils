@@ -82,6 +82,11 @@ func (it *JoinIterator[A, B, C]) Valid() bool {
 	return ok
 }
 
+// Key implements the Iterator interface.
+func (it *JoinIterator[A, B, C]) Key() []byte {
+	return nil
+}
+
 // Value implements the Iterator interface.
 func (it *JoinIterator[A, B, C]) Value() (value C, err error) {
 	return it.value, it.err
