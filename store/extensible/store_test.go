@@ -1,14 +1,14 @@
-package object_test
+package extensible_test
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"testing"
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
+	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/iters"
-	objstore "github.com/ehsanranjbar/badgerutils/store/object"
+	extstore "github.com/ehsanranjbar/badgerutils/store/extensible"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,15 +27,8 @@ func (t *TestStruct) UnmarshalBinary(data []byte) error {
 
 type TestIndexer struct{}
 
-func (i TestIndexer) Index(v *TestStruct, update bool) map[string]badgerutils.RawKVPair {
-	if v == nil {
-		return nil
-	}
-
-	return map[string]badgerutils.RawKVPair{
-		"A_idx": badgerutils.NewRawKVPair(binary.LittleEndian.AppendUint64(nil, uint64(-v.A)), nil),
-		"B_idx": badgerutils.NewRawKVPair([]byte(v.B), nil),
-	}
+func (i TestIndexer) Index(v *TestStruct, update bool) []badgerutils.RawKVPair {
+	return []badgerutils.RawKVPair{}
 }
 
 func TestObjectStore(t *testing.T) {
@@ -46,7 +39,10 @@ func TestObjectStore(t *testing.T) {
 
 	txn := db.NewTransaction(true)
 	defer txn.Discard()
-	store := objstore.New(txn, &TestIndexer{})
+	store := extstore.New[TestStruct](txn)
+	idx := TestIndexer{}
+	ext := indexing.NewExtension(idx)
+	store.AddExtension("test", ext)
 
 	var (
 		keys    = [][]byte{{1}, {2}, {3}}
@@ -79,20 +75,6 @@ func TestObjectStore(t *testing.T) {
 		}
 	})
 
-	t.Run("GetByRef", func(t *testing.T) {
-		for _, obj := range objects {
-			v, err := store.GetByRef("A_idx", binary.LittleEndian.AppendUint64(nil, uint64(-obj.A)))
-			require.NoError(t, err)
-			require.Equal(t, obj, v)
-		}
-	})
-
-	t.Run("GetByRefNotFound", func(t *testing.T) {
-		v, err := store.GetByRef("A_idx", binary.BigEndian.AppendUint64(nil, 0))
-		require.Error(t, err)
-		require.Nil(t, v)
-	})
-
 	t.Run("Iterate", func(t *testing.T) {
 		iter := store.NewIterator(badger.DefaultIteratorOptions)
 		defer iter.Close()
@@ -101,16 +83,6 @@ func TestObjectStore(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, actual, len(keys))
 		require.Equal(t, objects, actual)
-	})
-
-	t.Run("IterateByRef", func(t *testing.T) {
-		iter := store.NewRefIterator("A_idx", badger.DefaultIteratorOptions)
-		defer iter.Close()
-
-		actual, err := iters.Collect(iter)
-		require.NoError(t, err)
-		require.Len(t, actual, len(keys))
-		require.Equal(t, [][]byte{{3}, {2}, {1}}, actual)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
