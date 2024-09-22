@@ -38,6 +38,10 @@ func (i StructAIndexer) Index(v *StructA, update bool) []badgerutils.RawKVPair {
 	}
 }
 
+func (i StructAIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partition], error) {
+	return nil, nil
+}
+
 type StructB struct {
 	B string
 }
@@ -61,6 +65,10 @@ func (i StructBIndexer) Index(v *StructB, update bool) []badgerutils.RawKVPair {
 		badgerutils.NewRawKVPair(append([]byte("B_idx1"), []byte(v.B)...), nil),
 		badgerutils.NewRawKVPair(append([]byte("B_idx2"), []byte(v.B)...), nil),
 	}
+}
+
+func (i StructBIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partition], error) {
+	return nil, nil
 }
 
 func TestMigrate(t *testing.T) {

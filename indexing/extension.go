@@ -139,12 +139,12 @@ func (e *Extension[T]) Drop() error {
 	return nil
 }
 
-// GetByRef returns the value by the reference.
-func (e *Extension[T]) GetByRef(ref []byte) ([]byte, error) {
-	return refstore.New(e.store).Get(ref)
-}
+// Lookup queries the index with the given arguments and returns an iterator of keys.
+func (e *Extension[T]) Lookup(opts badger.IteratorOptions, args ...any) (badgerutils.Iterator[[]byte], error) {
+	iter, err := e.indexer.Lookup(args...)
+	if err != nil {
+		return nil, err
+	}
 
-// GetRefIterator returns a new ref iterator.
-func (e *Extension[T]) GetRefIterator(opts badger.IteratorOptions) badgerutils.Iterator[[]byte] {
-	return refstore.New(e.store).NewIterator(opts)
+	return NewPartitionLookupIterator(e.store, iter, opts), nil
 }

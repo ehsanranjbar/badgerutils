@@ -40,9 +40,9 @@ func (i TestIndexer) Index(v *TestStruct, update bool) []badgerutils.RawKVPair {
 	}
 }
 
-func (i TestIndexer) Lookup(args ...any) ([]byte, []byte, error) {
+func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partition], error) {
 	if len(args) < 1 {
-		return nil, nil, fmt.Errorf("no arguments")
+		return nil, fmt.Errorf("no arguments")
 	}
 
 	switch args[0] {
@@ -51,16 +51,16 @@ func (i TestIndexer) Lookup(args ...any) ([]byte, []byte, error) {
 		if len(args) > 1 && args[1] != nil {
 			b = append(b, binary.LittleEndian.AppendUint64(nil, uint64(-args[1].(int)))...)
 		}
-		return b, nil, nil
+		return iters.Slice([]indexing.Partition{indexing.NewPrefixPartition(b)}), nil
 	case "B":
 		b := []byte("B_idx")
 		if len(args) > 1 && args[1] != nil {
 			b = append(b, []byte(args[1].(string))...)
 		}
-		return b, nil, nil
+		return iters.Slice([]indexing.Partition{indexing.NewPrefixPartition(b)}), nil
 	}
 
-	return nil, nil, fmt.Errorf("invalid index: %s", args[0])
+	return nil, fmt.Errorf("invalid index: %s", args[0])
 }
 
 func TestObjectStore(t *testing.T) {
@@ -90,36 +90,9 @@ func TestObjectStore(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	t.Run("GetByRef_A", func(t *testing.T) {
-		for _, obj := range objects {
-			lb, _, err := idx.Lookup("A", obj.A)
-			require.NoError(t, err)
-			k, err := ext.GetByRef(lb)
-			require.NoError(t, err)
-			v, err := store.Get(k)
-			require.NoError(t, err)
-			require.Equal(t, obj, v)
-		}
-	})
-
-	t.Run("GetByRef_B", func(t *testing.T) {
-		for _, obj := range objects {
-			lb, _, err := idx.Lookup("B", obj.B)
-			require.NoError(t, err)
-			k, err := ext.GetByRef(lb)
-			require.NoError(t, err)
-			v, err := store.Get(k)
-			require.NoError(t, err)
-			require.Equal(t, obj, v)
-		}
-	})
-
-	t.Run("IterateByRef_A", func(t *testing.T) {
-		lb, _, err := idx.Lookup("A", nil)
+	t.Run("Lookup_A", func(t *testing.T) {
+		it, err := ext.Lookup(badger.DefaultIteratorOptions, "A", nil)
 		require.NoError(t, err)
-		it := ext.GetRefIterator(badger.IteratorOptions{
-			Prefix: lb,
-		})
 		defer it.Close()
 
 		actual, err := iters.Collect(it)
@@ -128,23 +101,14 @@ func TestObjectStore(t *testing.T) {
 		require.Equal(t, [][]byte{{3}, {2}, {1}}, actual)
 	})
 
-	t.Run("IterateByRef_B", func(t *testing.T) {
-		lb, _, err := idx.Lookup("B", nil)
+	t.Run("Lookup_B", func(t *testing.T) {
+		it, err := ext.Lookup(badger.DefaultIteratorOptions, "B", nil)
 		require.NoError(t, err)
-		it := ext.GetRefIterator(badger.IteratorOptions{
-			Prefix: lb,
-		})
 		defer it.Close()
 
 		actual, err := iters.Collect(it)
 		require.NoError(t, err)
 		require.Len(t, actual, len(keys))
 		require.Equal(t, [][]byte{{2}, {3}, {1}}, actual)
-	})
-
-	t.Run("GetByRefNotFound", func(t *testing.T) {
-		k, err := ext.GetByRef([]byte("not_found"))
-		require.Error(t, err)
-		require.Nil(t, k)
 	})
 }

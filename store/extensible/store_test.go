@@ -31,6 +31,10 @@ func (i TestIndexer) Index(v *TestStruct, update bool) []badgerutils.RawKVPair {
 	return []badgerutils.RawKVPair{}
 }
 
+func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partition], error) {
+	return nil, nil
+}
+
 func TestObjectStore(t *testing.T) {
 	opt := badger.DefaultOptions("").WithInMemory(true)
 	db, err := badger.Open(opt)

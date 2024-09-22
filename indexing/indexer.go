@@ -7,4 +7,5 @@ import (
 // Indexer is an indexer.
 type Indexer[T any] interface {
 	Index(v *T, set bool) []badgerutils.RawKVPair
+	Lookup(args ...any) (badgerutils.Iterator[Partition], error)
 }
