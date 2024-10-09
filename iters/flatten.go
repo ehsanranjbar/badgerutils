@@ -80,6 +80,15 @@ func (it *FlattenIterator[T]) Valid() bool {
 	return it.base.Valid() || (it.current != nil && it.current.Valid())
 }
 
+// Key implements the Iterator interface.
+func (it *FlattenIterator[T]) Key() []byte {
+	if it.current != nil {
+		return it.current.Key()
+	}
+
+	return nil
+}
+
 // Value returns the current value of the iterator.
 func (it *FlattenIterator[T]) Value() (value T, err error) {
 	if it.err != nil {

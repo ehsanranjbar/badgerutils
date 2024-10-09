@@ -36,7 +36,7 @@ func (it *sliceIterator[T]) Rewind() {
 
 // Seek implements the Iterator interface.
 func (it *sliceIterator[T]) Seek(key []byte) {
-	it.i = int(key[0])
+	it.i = int(binary.LittleEndian.Uint64(key))
 }
 
 // Valid implements the Iterator interface.
