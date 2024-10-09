@@ -11,7 +11,7 @@ import (
 
 func TestSever(t *testing.T) {
 	base := iters.Slice([]int{1, 2, 3, 4, 5})
-	it := iters.Sever(base, func(value int, _ *badger.Item) bool {
+	it := iters.Sever(base, func(_ []byte, value int, _ *badger.Item) bool {
 		return value > 3
 	})
 	it.Close()

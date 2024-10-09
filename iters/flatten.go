@@ -19,7 +19,9 @@ func Flatten[T any](base badgerutils.Iterator[badgerutils.Iterator[T]]) *Flatten
 
 // Close implements the Iterator interface.
 func (it *FlattenIterator[T]) Close() {
-	it.current.Close()
+	if it.current != nil {
+		it.current.Close()
+	}
 	it.base.Close()
 }
 

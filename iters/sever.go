@@ -10,13 +10,13 @@ import (
 // SeverIterator is an iterator that severs (stops) the iteration when the predicate is true.
 type SeverIterator[T any] struct {
 	base    badgerutils.Iterator[T]
-	f       func(T, *badger.Item) bool
+	pred    func(k []byte, v T, item *badger.Item) bool
 	severed bool
 }
 
 // Sever creates a new sever iterator.
-func Sever[T any](base badgerutils.Iterator[T], f func(T, *badger.Item) bool) *SeverIterator[T] {
-	return &SeverIterator[T]{base: base, f: f}
+func Sever[T any](base badgerutils.Iterator[T], f func([]byte, T, *badger.Item) bool) *SeverIterator[T] {
+	return &SeverIterator[T]{base: base, pred: f}
 }
 
 // Close implements the Iterator interface.
@@ -42,7 +42,7 @@ func (it *SeverIterator[T]) Next() {
 
 func (it *SeverIterator[T]) checkSevered() {
 	value, err := it.base.Value()
-	if err != nil || it.f(value, it.base.Item()) {
+	if err != nil || it.pred(it.base.Key(), value, it.base.Item()) {
 		it.severed = true
 		return
 	}
