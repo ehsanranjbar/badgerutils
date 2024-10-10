@@ -34,6 +34,7 @@ func (it *SeverIterator[T]) Next() {
 	if it.severed {
 		return
 	}
+
 	it.base.Next()
 	if it.base.Valid() && !it.severed {
 		it.checkSevered()

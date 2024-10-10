@@ -126,7 +126,5 @@ func (s *Store) NewIterator(opts badger.IteratorOptions) badgerutils.Iterator[[]
 		iter = pstore.NewIterator(iter, pfx)
 	}
 
-	return &iterator{
-		base: iter,
-	}
+	return newIterator(iter)
 }

@@ -2,149 +2,123 @@ package indexing
 
 import (
 	"bytes"
+	"encoding/hex"
+	"strings"
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
+	"github.com/ehsanranjbar/badgerutils/iters"
 	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
+	"github.com/ehsanranjbar/badgerutils/utils/be"
 )
 
+// Partition represents a range of keys from low to high with optional exclusivity on both ends.
 type Partition struct {
-	Type PartitionType
-	Low  []byte
-	High []byte
+	low, high Bound[[]byte]
 }
 
-type PartitionType int
-
-const (
-	PartitionTypeInvalid PartitionType = iota
-	PartitionTypePrefix                // Using low as prefix
-	PartitionTypeRange                 // Using low and high as range
-)
-
-func NewPrefixPartition(low []byte) Partition {
+// NewPartition creates a new partition with the given low and high keys and exclusivity.
+func NewPartition(low, high Bound[[]byte]) Partition {
 	return Partition{
-		Type: PartitionTypePrefix,
-		Low:  low,
+		low:  low,
+		high: high,
 	}
 }
 
-func NewRangePartition(low, high []byte) Partition {
-	return Partition{
-		Type: PartitionTypeRange,
-		Low:  low,
-		High: high,
+// String returns the string representation of the partition.
+func (p Partition) String() string {
+	var sb strings.Builder
+	if p.low.exclusive {
+		sb.WriteString("(")
+	} else {
+		sb.WriteString("[")
 	}
+	if p.low.IsEmpty() {
+		sb.WriteString("0x00")
+	} else {
+		sb.WriteString("0x")
+		sb.WriteString(hex.EncodeToString(p.low.value))
+	}
+	sb.WriteString(", ")
+	if p.high.IsEmpty() {
+		sb.WriteString("∞")
+	} else {
+		sb.WriteString("0x")
+		sb.WriteString(hex.EncodeToString(p.high.value))
+	}
+	if p.high.exclusive {
+		sb.WriteString(")")
+	} else {
+		sb.WriteString("]")
+	}
+	return sb.String()
 }
 
-func NewPartitionLookupIterator(
-	store badgerutils.BadgerStore,
-	ranges badgerutils.Iterator[Partition],
+// LookupPartitions returns an iterator that iterates over the keys in the given partition iterator.
+func LookupPartitions(
+	store *refstore.Store,
+	parts badgerutils.Iterator[Partition],
 	opts badger.IteratorOptions,
 ) badgerutils.Iterator[[]byte] {
-	return &PartitionLookupIterator{
-		store:      refstore.New(store),
-		partitions: ranges,
-		opts:       opts,
-		iter:       nil,
-	}
-}
+	return iters.Flatten(
+		iters.Map(parts, func(p Partition, _ *badger.Item) (badgerutils.Iterator[[]byte], error) {
+			iter := store.NewIterator(badger.IteratorOptions{
+				PrefetchSize:   opts.PrefetchSize,
+				PrefetchValues: opts.PrefetchValues,
+				Reverse:        opts.Reverse,
+				AllVersions:    opts.AllVersions,
+				InternalAccess: opts.InternalAccess,
+				SinceTs:        opts.SinceTs,
+			})
 
-type PartitionLookupIterator struct {
-	store      *refstore.Store
-	partitions badgerutils.Iterator[Partition]
-	current    Partition
-	opts       badger.IteratorOptions
-	iter       badgerutils.Iterator[[]byte]
-}
+			if opts.Reverse {
+				s := p.high.value
+				if !p.high.IsEmpty() && !p.high.Exclusive() {
+					s = be.IncrementBytes(bytes.Clone(p.high.value))
+				}
 
-func (i *PartitionLookupIterator) Close() {
-	if i.iter != nil {
-		i.iter.Close()
-	}
-	i.partitions.Close()
-}
+				iter = iters.RewindSeek(iter, s)
+				if !p.high.IsEmpty() {
+					iter = iters.Skip(iter, func(_ struct{}, key []byte, _ []byte, _ *badger.Item) (struct{}, bool) {
+						if p.high.Exclusive() {
+							return struct{}{}, bytes.Compare(key, p.high.value) >= 0
+						} else {
+							return struct{}{}, bytes.Compare(key, p.high.value) > 0
+						}
+					})
+				}
+			} else {
+				iter = iters.RewindSeek(iter, p.low.value)
+				if p.low.Exclusive() {
+					iter = iters.Skip(iter, func(_ struct{}, key []byte, _ []byte, _ *badger.Item) (struct{}, bool) {
+						return struct{}{}, bytes.Equal(key, p.low.value)
+					})
+				}
+			}
 
-func (i *PartitionLookupIterator) Item() *badger.Item {
-	if i.iter != nil {
-		return i.iter.Item()
-	}
+			return iters.Sever(iter, func(key []byte, _ []byte, _ *badger.Item) bool {
+				if opts.Reverse {
+					if p.low.IsEmpty() {
+						return false
+					}
 
-	return nil
-}
+					if p.low.Exclusive() {
+						return bytes.Compare(key, p.low.value) <= 0
+					} else {
+						return bytes.Compare(key, p.low.value) < 0
+					}
+				} else {
+					if p.high.IsEmpty() {
+						return false
+					}
 
-func (i *PartitionLookupIterator) Rewind() {
-	i.partitions.Rewind()
-
-	i.loadCurrent()
-}
-
-func (i *PartitionLookupIterator) loadCurrent() {
-	if i.iter != nil {
-		i.iter.Close()
-	}
-
-	if i.partitions.Valid() {
-		i.current, _ = i.partitions.Value()
-		var prefix []byte
-		if i.current.Type == PartitionTypePrefix {
-			prefix = i.current.Low
-		}
-		i.iter = i.store.NewIterator(badger.IteratorOptions{
-			PrefetchSize:   i.opts.PrefetchSize,
-			PrefetchValues: i.opts.PrefetchValues,
-			Reverse:        i.opts.Reverse,
-			AllVersions:    i.opts.AllVersions,
-			InternalAccess: i.opts.InternalAccess,
-			Prefix:         prefix,
-			SinceTs:        i.opts.SinceTs,
-		})
-
-		if i.current.Type == PartitionTypePrefix {
-			i.iter.Rewind()
-		} else {
-			i.iter.Seek(i.current.Low)
-		}
-
-		i.partitions.Next()
-	}
-}
-
-func (i *PartitionLookupIterator) Seek(key []byte) {}
-
-func (i *PartitionLookupIterator) Valid() bool {
-	return i.partitions.Valid() || i.isCurrentValid()
-}
-
-func (i *PartitionLookupIterator) isCurrentValid() bool {
-	return i.iter != nil && i.iter.Valid() && (i.current.Type == PartitionTypePrefix || i.isInRange())
-}
-
-func (i *PartitionLookupIterator) isInRange() bool {
-	return i.current.High == nil || bytes.Compare(i.iter.Key(), i.current.High) <= 0
-}
-
-func (i *PartitionLookupIterator) Next() {
-	i.iter.Next()
-	if i.isCurrentValid() {
-		return
-	}
-
-	i.loadCurrent()
-}
-
-func (i *PartitionLookupIterator) Key() []byte {
-	if i.iter != nil {
-		return i.iter.Key()
-	}
-
-	return nil
-}
-
-func (i *PartitionLookupIterator) Value() ([]byte, error) {
-	if i.iter != nil {
-		return i.iter.Value()
-	}
-
-	return nil, nil
+					if p.high.Exclusive() {
+						return bytes.Compare(key, p.high.value) >= 0
+					} else {
+						return bytes.Compare(key, p.high.value) > 0
+					}
+				}
+			}), nil
+		}),
+	)
 }

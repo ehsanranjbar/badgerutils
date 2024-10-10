@@ -23,7 +23,7 @@ func GetEncodeFuncByType(t reflect.Type) EncodeFunc {
 		}
 	case reflect.Uint:
 		return func(v any) []byte {
-			return binary.LittleEndian.AppendUint64(nil, uint64(v.(uint)))
+			return binary.BigEndian.AppendUint64(nil, uint64(v.(uint)))
 		}
 	case reflect.Slice:
 		if t.Elem().Kind() == reflect.Uint8 {
@@ -46,7 +46,7 @@ func EncodeInt64(v int64) []byte {
 	if v < 0 {
 		u = uint64(v + math.MaxInt64)
 	}
-	return binary.LittleEndian.AppendUint64(nil, u)
+	return binary.BigEndian.AppendUint64(nil, u)
 }
 
 // InverseBytes returns the boolean inverse of the given byte slice.
@@ -55,4 +55,26 @@ func InverseBytes(b []byte) []byte {
 		b[i] = ^b[i]
 	}
 	return b
+}
+
+// IncrementBytes increments the given byte slice so that it would be the next in lexicographical order.
+func IncrementBytes(b []byte) []byte {
+	for i := len(b) - 1; i >= 0; i-- {
+		if b[i] != 0xff {
+			b[i]++
+			return b
+		}
+	}
+	return append(b, 0x01)
+}
+
+// GetSizeByType returns the size of the given type. 0 is returned if the size is unknown.
+func GetSizeByType(t reflect.Type) int {
+	switch t.Kind() {
+	case reflect.Int:
+		return 8
+	case reflect.Uint:
+		return 8
+	}
+	return 0
 }

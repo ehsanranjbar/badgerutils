@@ -15,7 +15,7 @@ func PopulateRoaring32(bm *roaring.Bitmap, iter badgerutils.Iterator[[]byte]) er
 		if err != nil {
 			return err
 		}
-		i := binary.LittleEndian.Uint32(padOrTrim(v, 32))
+		i := binary.BigEndian.Uint32(padOrTrim(v, 32))
 		bm.Add(i)
 	}
 	return nil
@@ -38,7 +38,7 @@ func PopulateRoaring64(bm *roaring64.Bitmap, iter badgerutils.Iterator[[]byte]) 
 		if err != nil {
 			return err
 		}
-		i := binary.LittleEndian.Uint64(padOrTrim(v, 64))
+		i := binary.BigEndian.Uint64(padOrTrim(v, 64))
 		bm.Add(i)
 	}
 	return nil

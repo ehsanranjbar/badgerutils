@@ -9,7 +9,6 @@ import (
 type FlattenIterator[T any] struct {
 	base    badgerutils.Iterator[badgerutils.Iterator[T]]
 	current badgerutils.Iterator[T]
-	err     error
 }
 
 // Flatten creates a new flatten iterator.
@@ -27,7 +26,7 @@ func (it *FlattenIterator[T]) Close() {
 
 // Item implements the Iterator interface.
 func (it *FlattenIterator[T]) Item() *badger.Item {
-	if it.current == nil {
+	if it.current == nil || !it.current.Valid() {
 		return nil
 	}
 
@@ -41,40 +40,47 @@ func (it *FlattenIterator[T]) Next() {
 		if it.current.Valid() {
 			return
 		}
-		it.current.Close()
 	}
 
 	it.base.Next()
-	if it.base.Valid() {
-		it.current, it.err = it.base.Value()
+	it.nextCurrent()
+}
+
+func (it *FlattenIterator[T]) nextCurrent() {
+	for {
+		if !it.base.Valid() {
+			break
+		}
+
+		if it.current != nil {
+			it.current.Close()
+		}
+
+		var err error
+		it.current, err = it.base.Value()
+		if err != nil {
+			continue
+		}
+
 		it.current.Rewind()
+		if it.current.Valid() {
+			break
+		}
+
+		it.base.Next()
 	}
 }
 
 // Rewind implements the Iterator interface.
 func (it *FlattenIterator[T]) Rewind() {
 	it.base.Rewind()
-	if it.base.Valid() {
-		if it.current != nil {
-			it.current.Close()
-		}
-
-		it.current, it.err = it.base.Value()
-		it.current.Rewind()
-	}
+	it.nextCurrent()
 }
 
 // Seek implements the Iterator interface.
 func (it *FlattenIterator[T]) Seek(key []byte) {
 	it.base.Seek(key)
-	if it.base.Valid() {
-		if it.current != nil {
-			it.current.Close()
-		}
-
-		it.current, it.err = it.base.Value()
-		it.current.Rewind()
-	}
+	it.nextCurrent()
 }
 
 // Valid implements the Iterator interface.
@@ -93,10 +99,6 @@ func (it *FlattenIterator[T]) Key() []byte {
 
 // Value returns the current value of the iterator.
 func (it *FlattenIterator[T]) Value() (value T, err error) {
-	if it.err != nil {
-		return value, it.err
-	}
-
 	if it.current != nil {
 		return it.current.Value()
 	}

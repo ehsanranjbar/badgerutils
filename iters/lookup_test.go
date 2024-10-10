@@ -19,7 +19,7 @@ func (i TestIndexer) Index(v *StructA, update bool) []badgerutils.RawKVPair {
 	}
 
 	return []badgerutils.RawKVPair{
-		badgerutils.NewRawKVPair(append([]byte("A_idx"), binary.LittleEndian.AppendUint64(nil, uint64(v.A))...), nil),
+		badgerutils.NewRawKVPair(append([]byte("A_idx"), binary.BigEndian.AppendUint64(nil, uint64(v.A))...), nil),
 	}
 }
 

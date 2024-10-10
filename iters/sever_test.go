@@ -20,7 +20,7 @@ func TestSever(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []int{1, 2, 3}, actual)
 
-	it.Seek(binary.LittleEndian.AppendUint64(nil, 2))
+	it.Seek(binary.BigEndian.AppendUint64(nil, 2))
 
 	value, err := it.Value()
 	require.NoError(t, err)

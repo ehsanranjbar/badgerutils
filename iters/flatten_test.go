@@ -53,6 +53,6 @@ func TestFlatten(t *testing.T) {
 		}
 	}
 
-	flatten.Seek(binary.LittleEndian.AppendUint64(nil, 1))
+	flatten.Seek(binary.BigEndian.AppendUint64(nil, 1))
 	require.Equal(t, []byte{1, 0}, flatten.Item().Key())
 }

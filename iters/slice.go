@@ -36,7 +36,7 @@ func (it *sliceIterator[T]) Rewind() {
 
 // Seek implements the Iterator interface.
 func (it *sliceIterator[T]) Seek(key []byte) {
-	it.i = int(binary.LittleEndian.Uint64(key))
+	it.i = int(binary.BigEndian.Uint64(key))
 }
 
 // Valid implements the Iterator interface.
@@ -46,7 +46,7 @@ func (it *sliceIterator[T]) Valid() bool {
 
 // Key implements the Iterator interface.
 func (it *sliceIterator[T]) Key() []byte {
-	return binary.LittleEndian.AppendUint64(nil, uint64(it.i))
+	return binary.BigEndian.AppendUint64(nil, uint64(it.i))
 }
 
 // Value implements the Iterator interface.

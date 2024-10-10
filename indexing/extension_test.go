@@ -1,6 +1,7 @@
 package indexing_test
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	extstore "github.com/ehsanranjbar/badgerutils/store/extensible"
+	"github.com/ehsanranjbar/badgerutils/utils/be"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,7 +37,7 @@ func (i TestIndexer) Index(v *TestStruct, update bool) []badgerutils.RawKVPair {
 	}
 
 	return []badgerutils.RawKVPair{
-		badgerutils.NewRawKVPair(append([]byte("A_idx"), binary.LittleEndian.AppendUint64(nil, uint64(-v.A))...), nil),
+		badgerutils.NewRawKVPair(append([]byte("A_idx"), binary.BigEndian.AppendUint64(nil, uint64(-v.A))...), nil),
 		badgerutils.NewRawKVPair(append([]byte("B_idx"), []byte(v.B)...), nil),
 	}
 }
@@ -45,22 +47,24 @@ func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partitio
 		return nil, fmt.Errorf("no arguments")
 	}
 
+	var low []byte
 	switch args[0] {
 	case "A":
-		b := []byte("A_idx")
+		low = []byte("A_idx")
 		if len(args) > 1 && args[1] != nil {
-			b = append(b, binary.LittleEndian.AppendUint64(nil, uint64(-args[1].(int)))...)
+			low = append(low, binary.BigEndian.AppendUint64(nil, uint64(-args[1].(int)))...)
 		}
-		return iters.Slice([]indexing.Partition{indexing.NewPrefixPartition(b)}), nil
 	case "B":
-		b := []byte("B_idx")
+		low = []byte("B_idx")
 		if len(args) > 1 && args[1] != nil {
-			b = append(b, []byte(args[1].(string))...)
+			low = append(low, []byte(args[1].(string))...)
 		}
-		return iters.Slice([]indexing.Partition{indexing.NewPrefixPartition(b)}), nil
+	default:
+		return nil, fmt.Errorf("invalid index: %s", args[0])
 	}
 
-	return nil, fmt.Errorf("invalid index: %s", args[0])
+	high := be.IncrementBytes(bytes.Clone(low))
+	return iters.Slice([]indexing.Partition{indexing.NewPartition(indexing.NewBound(low, false), indexing.NewBound(high, true))}), nil
 }
 
 func TestObjectStore(t *testing.T) {

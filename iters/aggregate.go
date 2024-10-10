@@ -7,7 +7,7 @@ import (
 
 // AggregateIterator is an iterator that aggregates the values of base iterator as it iterates without
 // interfering with the base iterator.
-type AggregateIterator[T any, S any] struct {
+type AggregateIterator[T, S any] struct {
 	base  badgerutils.Iterator[T]
 	state S
 	f     func(S, T, *badger.Item) S

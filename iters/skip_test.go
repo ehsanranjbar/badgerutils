@@ -29,7 +29,7 @@ func TestSkip(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	iter := iters.Skip(store.NewIterator(badger.DefaultIteratorOptions), 1)
+	iter := iters.SkipN(store.NewIterator(badger.DefaultIteratorOptions), 1)
 	defer iter.Close()
 
 	iter.Rewind()

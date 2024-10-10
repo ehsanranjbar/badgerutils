@@ -146,5 +146,5 @@ func (e *Extension[T]) Lookup(opts badger.IteratorOptions, args ...any) (badgeru
 		return nil, err
 	}
 
-	return NewPartitionLookupIterator(e.store, iter, opts), nil
+	return LookupPartitions(refstore.New(e.store), iter, opts), nil
 }
