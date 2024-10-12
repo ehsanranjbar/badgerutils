@@ -28,14 +28,14 @@ func (s *StructA) UnmarshalBinary(data []byte) error {
 
 type StructAIndexer struct{}
 
-func (i StructAIndexer) Index(v *StructA, update bool) []badgerutils.RawKVPair {
+func (i StructAIndexer) Index(v *StructA, update bool) ([]badgerutils.RawKVPair, error) {
 	if v == nil {
-		return nil
+		return nil, nil
 	}
 
 	return []badgerutils.RawKVPair{
 		badgerutils.NewRawKVPair(append([]byte("A_idx"), binary.BigEndian.AppendUint64(nil, uint64(v.A))...), nil),
-	}
+	}, nil
 }
 
 func (i StructAIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partition], error) {
@@ -56,15 +56,15 @@ func (s *StructB) UnmarshalBinary(data []byte) error {
 
 type StructBIndexer struct{}
 
-func (i StructBIndexer) Index(v *StructB, update bool) []badgerutils.RawKVPair {
+func (i StructBIndexer) Index(v *StructB, update bool) ([]badgerutils.RawKVPair, error) {
 	if v == nil {
-		return nil
+		return nil, nil
 	}
 
 	return []badgerutils.RawKVPair{
 		badgerutils.NewRawKVPair(append([]byte("B_idx1"), []byte(v.B)...), nil),
 		badgerutils.NewRawKVPair(append([]byte("B_idx2"), []byte(v.B)...), nil),
-	}
+	}, nil
 }
 
 func (i StructBIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partition], error) {

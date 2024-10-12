@@ -31,15 +31,15 @@ func (t *TestStruct) UnmarshalBinary(data []byte) error {
 
 type TestIndexer struct{}
 
-func (i TestIndexer) Index(v *TestStruct, update bool) []badgerutils.RawKVPair {
+func (i TestIndexer) Index(v *TestStruct, update bool) ([]badgerutils.RawKVPair, error) {
 	if v == nil {
-		return nil
+		return nil, nil
 	}
 
 	return []badgerutils.RawKVPair{
 		badgerutils.NewRawKVPair(append([]byte("A_idx"), binary.BigEndian.AppendUint64(nil, uint64(-v.A))...), nil),
 		badgerutils.NewRawKVPair(append([]byte("B_idx"), []byte(v.B)...), nil),
-	}
+	}, nil
 }
 
 func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partition], error) {
@@ -63,7 +63,7 @@ func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partitio
 		return nil, fmt.Errorf("invalid index: %s", args[0])
 	}
 
-	high := be.IncrementBytes(bytes.Clone(low))
+	high := be.Increment(bytes.Clone(low))
 	return iters.Slice([]indexing.Partition{indexing.NewPartition(indexing.NewBound(low, false), indexing.NewBound(high, true))}), nil
 }
 

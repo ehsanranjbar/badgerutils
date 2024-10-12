@@ -27,8 +27,8 @@ func (t *TestStruct) UnmarshalBinary(data []byte) error {
 
 type TestIndexer struct{}
 
-func (i TestIndexer) Index(v *TestStruct, update bool) []badgerutils.RawKVPair {
-	return []badgerutils.RawKVPair{}
+func (i TestIndexer) Index(v *TestStruct, update bool) ([]badgerutils.RawKVPair, error) {
+	return []badgerutils.RawKVPair{}, nil
 }
 
 func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partition], error) {

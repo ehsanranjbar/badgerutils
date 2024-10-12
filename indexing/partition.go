@@ -62,6 +62,7 @@ func LookupPartitions(
 ) badgerutils.Iterator[[]byte] {
 	return iters.Flatten(
 		iters.Map(parts, func(p Partition, _ *badger.Item) (badgerutils.Iterator[[]byte], error) {
+			// Omitting the prefix option.
 			iter := store.NewIterator(badger.IteratorOptions{
 				PrefetchSize:   opts.PrefetchSize,
 				PrefetchValues: opts.PrefetchValues,
@@ -72,9 +73,11 @@ func LookupPartitions(
 			})
 
 			if opts.Reverse {
+				// Special case for reverse iteration with non-empty high bound that happens with reference stores
+				// Because we want to seek and sever base on prefixes instead of the actual keys.
 				s := p.high.value
 				if !p.high.IsEmpty() && !p.high.Exclusive() {
-					s = be.IncrementBytes(bytes.Clone(p.high.value))
+					s = be.Increment(bytes.Clone(p.high.value))
 				}
 
 				iter = iters.RewindSeek(iter, s)

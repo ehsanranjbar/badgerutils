@@ -1,4 +1,4 @@
-package utils
+package reflecthelpers
 
 import (
 	"fmt"
@@ -9,6 +9,14 @@ import (
 // GetBaseType returns the base type of the given type by dereferencing pointers.
 func GetBaseType(t reflect.Type) reflect.Type {
 	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t
+}
+
+// GetElemType returns the element type of the given type by dereferencing pointers, arrays, and slices.
+func GetElemType(t reflect.Type) reflect.Type {
+	for t.Kind() == reflect.Ptr || t.Kind() == reflect.Array || t.Kind() == reflect.Slice {
 		t = t.Elem()
 	}
 	return t

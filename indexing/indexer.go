@@ -11,6 +11,6 @@ var ErrUndefinedLookup = fmt.Errorf("undefined lookup")
 
 // Indexer is an indexer.
 type Indexer[T any] interface {
-	Index(v *T, set bool) []badgerutils.RawKVPair
+	Index(v *T, set bool) ([]badgerutils.RawKVPair, error)
 	Lookup(args ...any) (badgerutils.Iterator[Partition], error)
 }

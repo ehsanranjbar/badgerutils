@@ -74,7 +74,10 @@ func (e *Extension[T]) indexIter(iter badgerutils.Iterator[*T]) error {
 			ttl = time.Duration(iter.Item().ExpiresAt()-uint64(time.Now().Unix())) * time.Second
 		}
 
-		kvs := e.indexer.Index(v, true)
+		kvs, err := e.indexer.Index(v, true)
+		if err != nil {
+			return err
+		}
 		for _, kv := range kvs {
 			err = store.Set(k, refstore.NewRefEntry(kv.Key).WithValue(kv.Value).WithTTL(ttl))
 			if err != nil {
@@ -94,7 +97,10 @@ func (e *Extension[T]) setInitialized() error {
 func (e *Extension[T]) OnDelete(key []byte, value *T) error {
 	store := refstore.New(e.store)
 
-	kvs := e.indexer.Index(value, false)
+	kvs, err := e.indexer.Index(value, false)
+	if err != nil {
+		return err
+	}
 	for _, kv := range kvs {
 		err := store.Delete(kv.Key)
 		if err != nil {
@@ -110,7 +116,10 @@ func (e *Extension[T]) OnSet(key []byte, old, new *T) error {
 	store := refstore.New(e.store)
 
 	if old != nil {
-		kvs := e.indexer.Index(old, false)
+		kvs, err := e.indexer.Index(old, false)
+		if err != nil {
+			return err
+		}
 		for _, kv := range kvs {
 			err := store.Delete(kv.Key)
 			if err != nil {
@@ -119,7 +128,10 @@ func (e *Extension[T]) OnSet(key []byte, old, new *T) error {
 		}
 	}
 
-	kvs := e.indexer.Index(new, true)
+	kvs, err := e.indexer.Index(new, true)
+	if err != nil {
+		return err
+	}
 	for _, kv := range kvs {
 		var ttl time.Duration
 		if ti, ok := any(new).(sstore.TemporaryItem); ok {
