@@ -7,7 +7,7 @@ import (
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/iters"
-	"github.com/ehsanranjbar/badgerutils/utils/reflecthelpers"
+	reflectutils "github.com/ehsanranjbar/badgerutils/utils/reflect"
 )
 
 // Indexer is an indexer for a struct type that generates keys base on struct fields for a btree index.
@@ -19,7 +19,7 @@ type Indexer[T any] struct {
 // New creates a new indexer for the given struct type and components.
 func New[T any](comps ...Component) (*Indexer[T], error) {
 	rt := reflect.TypeFor[T]()
-	if reflecthelpers.GetBaseType(rt).Kind() != reflect.Struct {
+	if reflectutils.GetBaseType(rt).Kind() != reflect.Struct {
 		return nil, fmt.Errorf("indexer only supports struct types but got %s", rt)
 	}
 
@@ -75,7 +75,7 @@ func (si *Indexer[T]) Index(v *T, set bool) ([]badgerutils.RawKVPair, error) {
 func (si *Indexer[T]) composeKeys(rf reflect.Value) ([][]byte, error) {
 	var keys [][]byte
 	for _, comp := range si.components {
-		v, ok := reflecthelpers.SafeFieldByIndex(rf, comp.fieldIndex)
+		v, ok := reflectutils.SafeFieldByIndex(rf, comp.fieldIndex)
 		if !ok {
 			return nil, fmt.Errorf("failed to get field by index %v", comp.fieldIndex)
 		}

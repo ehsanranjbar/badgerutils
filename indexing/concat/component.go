@@ -7,7 +7,7 @@ import (
 
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/utils/be"
-	"github.com/ehsanranjbar/badgerutils/utils/reflecthelpers"
+	reflectutils "github.com/ehsanranjbar/badgerutils/utils/reflect"
 )
 
 var (
@@ -51,17 +51,17 @@ func (comp Component) WithEncodeFunc(f be.EncodeFunc) Component {
 }
 
 func (comp Component) verify(pt reflect.Type) (*verifiedComponent, error) {
-	field, index, err := reflecthelpers.ExtractPath(pt, comp.path)
+	field, index, err := reflectutils.ExtractPath(pt, comp.path)
 	if err != nil {
 		return nil, fmt.Errorf("invalid component path %s: %w", comp.path, err)
 	}
-	bt := reflecthelpers.GetBaseType(field.Type)
+	bt := reflectutils.GetBaseType(field.Type)
 
 	vt := &verifiedComponent{
 		Component:   comp,
 		fieldIndex:  index,
 		reflectType: field.Type,
-		elemKind:    reflecthelpers.GetElemType(bt).Kind(),
+		elemKind:    reflectutils.GetElemType(bt).Kind(),
 	}
 
 	if vt.encodeFunc == nil {

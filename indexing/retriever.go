@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/ehsanranjbar/badgerutils/utils/reflecthelpers"
+	reflectutils "github.com/ehsanranjbar/badgerutils/utils/reflect"
 )
 
 // ValueRetriever is an interface that retrieves index custom values for index only scans from the indexed type.
@@ -29,7 +29,7 @@ func NewMapValueRetriever[T any](
 
 	var t T
 	reflectType := reflect.TypeOf(t)
-	if reflecthelpers.GetBaseType(reflectType).Kind() != reflect.Struct {
+	if reflectutils.GetBaseType(reflectType).Kind() != reflect.Struct {
 		return nil, fmt.Errorf("map value retriever only supports struct types but got %T", t)
 	}
 
@@ -47,7 +47,7 @@ func NewMapValueRetriever[T any](
 func extractFields(t reflect.Type, paths []string) (map[string][]int, error) {
 	fields := make(map[string][]int)
 	for _, path := range paths {
-		_, index, err := reflecthelpers.ExtractPath(t, path)
+		_, index, err := reflectutils.ExtractPath(t, path)
 		if err != nil {
 			return nil, err
 		}
@@ -61,7 +61,7 @@ func (r *MapValueRetriever[T]) RetrieveValue(v *T) []byte {
 	m := map[string]any{}
 	if v != nil {
 		for path, fi := range r.fields {
-			f, ok := reflecthelpers.SafeFieldByIndex(reflect.ValueOf(v).Elem(), fi)
+			f, ok := reflectutils.SafeFieldByIndex(reflect.ValueOf(v).Elem(), fi)
 			if ok {
 				m[path] = f.Interface()
 			} else {
