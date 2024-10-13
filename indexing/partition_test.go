@@ -7,36 +7,12 @@ import (
 	"testing"
 
 	badger "github.com/dgraph-io/badger/v4"
+	"github.com/ehsanranjbar/badgerutils/exprs"
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
 	"github.com/stretchr/testify/require"
 )
-
-func TestPartitionString(t *testing.T) {
-	tests := []struct {
-		partition indexing.Partition
-		expected  string
-	}{
-		{
-			partition: indexing.NewPartition(indexing.NewBound([]byte{0x01}, false), indexing.NewBound([]byte{0x02}, false)),
-			expected:  "[0x01, 0x02]",
-		},
-		{
-			partition: indexing.NewPartition(indexing.NewBound[[]byte]([]byte{0x01}, true), indexing.NewBound[[]byte]([]byte{0x02}, true)),
-			expected:  "(0x01, 0x02)",
-		},
-		{
-			partition: indexing.NewPartition(indexing.EmptyBound[[]byte](), indexing.EmptyBound[[]byte]()),
-			expected:  "[0x00, ∞]",
-		},
-	}
-
-	for _, test := range tests {
-		result := test.partition.String()
-		require.Equal(t, test.expected, result)
-	}
-}
 
 func TestLookupPartitions(t *testing.T) {
 	opt := badger.DefaultOptions("").WithInMemory(true)
@@ -63,126 +39,99 @@ func TestLookupPartitions(t *testing.T) {
 		name           string
 		parts          []indexing.Partition
 		expectedCount  int
-		expectedRanges []uint64Range
+		expectedRanges []exprs.Range[uint64]
 	}{
 		{
-			name: "(∞, ∞)",
+			name: "[0x00, ∞)",
 			parts: []indexing.Partition{
-				indexing.NewPartition(
-					indexing.EmptyBound[[]byte](),
-					indexing.EmptyBound[[]byte](),
-				),
+				indexing.NewPartition(nil, nil),
 			},
 			expectedCount: 702,
-			expectedRanges: []uint64Range{
-				{
-					low:  indexing.NewBound[uint64](0, false),
-					high: indexing.NewBound[uint64](702, false),
-				},
+			expectedRanges: []exprs.Range[uint64]{
+				exprs.NewRange(exprs.NewBound[uint64](0, false), exprs.NewBound[uint64](702, false)),
 			},
 		},
 		{
 			name: "[A, B)",
 			parts: []indexing.Partition{
 				indexing.NewPartition(
-					indexing.NewBound([]byte{'A'}, false),
-					indexing.NewBound([]byte{'B'}, true),
+					exprs.NewBound([]byte{'A'}, false),
+					exprs.NewBound([]byte{'B'}, true),
 				),
 			},
 			expectedCount: 27,
-			expectedRanges: []uint64Range{
-				{
-					low:  indexing.NewBound[uint64](0, false),
-					high: indexing.NewBound[uint64](26, false),
-				},
+			expectedRanges: []exprs.Range[uint64]{
+				exprs.NewRange(exprs.NewBound[uint64](0, false), exprs.NewBound[uint64](26, false)),
 			},
 		},
 		{
 			name: "(A, B]",
 			parts: []indexing.Partition{
 				indexing.NewPartition(
-					indexing.NewBound([]byte{'A'}, true),
-					indexing.NewBound([]byte{'B'}, false),
+					exprs.NewBound([]byte{'A'}, true),
+					exprs.NewBound([]byte{'B'}, false),
 				),
 			},
 			expectedCount: 27,
-			expectedRanges: []uint64Range{
-				{
-					low:  indexing.NewBound[uint64](1, false),
-					high: indexing.NewBound[uint64](27, false),
-				},
+			expectedRanges: []exprs.Range[uint64]{
+				exprs.NewRange(exprs.NewBound[uint64](1, false), exprs.NewBound[uint64](27, false)),
 			},
 		},
 		{
 			name: "[X, Y)",
 			parts: []indexing.Partition{
 				indexing.NewPartition(
-					indexing.NewBound([]byte{'X'}, false),
-					indexing.NewBound([]byte{'Y'}, true),
+					exprs.NewBound([]byte{'X'}, false),
+					exprs.NewBound([]byte{'Y'}, true),
 				),
 			},
 			expectedCount: 27,
-			expectedRanges: []uint64Range{
-				{
-					low:  indexing.NewBound[uint64](621, false),
-					high: indexing.NewBound[uint64](647, false),
-				},
+			expectedRanges: []exprs.Range[uint64]{
+				exprs.NewRange(exprs.NewBound[uint64](621, false), exprs.NewBound[uint64](647, false)),
 			},
 		},
 		{
 			name: "[A, B), [X, Y)",
 			parts: []indexing.Partition{
 				indexing.NewPartition(
-					indexing.NewBound([]byte{'A'}, false),
-					indexing.NewBound([]byte{'B'}, true),
+					exprs.NewBound([]byte{'A'}, false),
+					exprs.NewBound([]byte{'B'}, true),
 				),
 				indexing.NewPartition(
-					indexing.NewBound([]byte{'X'}, false),
-					indexing.NewBound([]byte{'Y'}, true),
+					exprs.NewBound([]byte{'X'}, false),
+					exprs.NewBound([]byte{'Y'}, true),
 				),
 			},
 			expectedCount: 54,
-			expectedRanges: []uint64Range{
-				{
-					low:  indexing.NewBound[uint64](0, false),
-					high: indexing.NewBound[uint64](26, false),
-				},
-				{
-					low:  indexing.NewBound[uint64](621, false),
-					high: indexing.NewBound[uint64](647, false),
-				},
+			expectedRanges: []exprs.Range[uint64]{
+				exprs.NewRange(exprs.NewBound[uint64](0, false), exprs.NewBound[uint64](26, false)),
+				exprs.NewRange(exprs.NewBound[uint64](621, false), exprs.NewBound[uint64](647, false)),
 			},
 		},
 		{
 			name: "(∞, B)",
 			parts: []indexing.Partition{
 				indexing.NewPartition(
-					indexing.EmptyBound[[]byte](),
-					indexing.NewBound([]byte{'B'}, true),
+					nil,
+					exprs.NewBound([]byte{'B'}, true),
 				),
 			},
 			expectedCount: 27,
-			expectedRanges: []uint64Range{
-				{
-					low:  indexing.NewBound[uint64](0, false),
-					high: indexing.NewBound[uint64](26, false),
-				},
+			expectedRanges: []exprs.Range[uint64]{
+				exprs.NewRange(exprs.NewBound[uint64](0, false), exprs.NewBound[uint64](26, false)),
 			},
 		},
 		{
 			name: "[Y, ∞)",
 			parts: []indexing.Partition{
 				indexing.NewPartition(
-					indexing.NewBound([]byte{'Y'}, false),
-					indexing.EmptyBound[[]byte](),
+					exprs.NewBound([]byte{'Y'}, false),
+					nil,
 				),
 			},
 			expectedCount: 54,
-			expectedRanges: []uint64Range{
-				{
-					low:  indexing.NewBound[uint64](648, false),
-					high: indexing.NewBound[uint64](701, false),
-				},
+			expectedRanges: []exprs.Range[uint64]{
+				exprs.NewRange(exprs.NewBound[uint64](648, false), exprs.NewBound[uint64](701, false)),
 			},
 		},
 	}
@@ -223,39 +172,7 @@ func TestLookupPartitions(t *testing.T) {
 	}
 }
 
-type uint64Range struct {
-	low, high indexing.Bound[uint64]
-}
-
-func (r uint64Range) IsWithin(value uint64) bool {
-	if !r.low.IsEmpty() {
-		if r.low.Exclusive() {
-			if value <= r.low.Value() {
-				return false
-			}
-		} else {
-			if value < r.low.Value() {
-				return false
-			}
-		}
-	}
-
-	if !r.high.IsEmpty() {
-		if r.high.Exclusive() {
-			if value >= r.high.Value() {
-				return false
-			}
-		} else {
-			if value > r.high.Value() {
-				return false
-			}
-		}
-	}
-
-	return true
-}
-
-func areWithinPartitions(items [][]byte, ranges []uint64Range) bool {
+func areWithinPartitions(items [][]byte, ranges []exprs.Range[uint64]) bool {
 	for _, item := range items {
 		if !isWithinPartitions(item, ranges) {
 			return false
@@ -265,12 +182,40 @@ func areWithinPartitions(items [][]byte, ranges []uint64Range) bool {
 	return true
 }
 
-func isWithinPartitions(item []byte, ranges []uint64Range) bool {
+func isWithinPartitions(item []byte, ranges []exprs.Range[uint64]) bool {
 	for _, r := range ranges {
-		if r.IsWithin(binary.BigEndian.Uint64(item)) {
+		if isWithin(r, binary.BigEndian.Uint64(item)) {
 			return true
 		}
 	}
 
 	return false
+}
+
+func isWithin(r exprs.Range[uint64], value uint64) bool {
+	if !r.Low().IsEmpty() {
+		if r.Low().Exclusive() {
+			if value <= r.Low().Value() {
+				return false
+			}
+		} else {
+			if value < r.Low().Value() {
+				return false
+			}
+		}
+	}
+
+	if !r.High().IsEmpty() {
+		if r.High().Exclusive() {
+			if value >= r.High().Value() {
+				return false
+			}
+		} else {
+			if value > r.High().Value() {
+				return false
+			}
+		}
+	}
+
+	return true
 }

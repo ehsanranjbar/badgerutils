@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ehsanranjbar/badgerutils"
+	"github.com/ehsanranjbar/badgerutils/exprs"
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/indexing/concat"
 	"github.com/ehsanranjbar/badgerutils/iters"
@@ -27,17 +28,10 @@ type Bar struct {
 	Test int
 }
 
-type MockRetriever struct{}
-
-func (r *MockRetriever) RetrieveValue(v *Foo) []byte {
-	return []byte("value")
-}
-
 func TestIndexer_Index(t *testing.T) {
 	tests := []struct {
 		name       string
 		components []concat.Component
-		retriever  indexing.ValueRetriever[Foo]
 		input      *Foo
 		want       []badgerutils.RawKVPair
 		wantErr    bool
@@ -129,18 +123,6 @@ func TestIndexer_Index(t *testing.T) {
 			},
 		},
 		{
-			name:       "With retriever",
-			components: []concat.Component{concat.NewComponent("Str1")},
-			retriever:  &MockRetriever{},
-			input:      &Foo{Str1: "Alice"},
-			want: []badgerutils.RawKVPair{
-				{
-					Key:   be.PadOrTrimRight([]byte("Alice"), concat.DefaultStringSize),
-					Value: []byte("value"),
-				},
-			},
-		},
-		{
 			name:       "Non-existing field",
 			components: []concat.Component{concat.NewComponent("NonExisting")},
 			input:      &Foo{},
@@ -165,8 +147,6 @@ func TestIndexer_Index(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			indexer.SetRetriever(tt.retriever)
-
 			got, err := indexer.Index(tt.input, true)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -190,99 +170,129 @@ func TestIndexer_Lookup(t *testing.T) {
 		{
 			name:       "Single component equal",
 			components: []concat.Component{concat.NewComponent("Str1")},
-			args:       []any{indexing.NewEqualLookupExpr("Str1", "Alice")},
+			args:       []any{exprs.NewNamed("Str1", exprs.NewEqual("Alice"))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					indexing.NewBound(be.PadOrTrimRight(be.EncodeString("Alice"), concat.DefaultStringSize), false),
-					indexing.NewBound(be.PadOrTrimRight(be.EncodeString("Alice"), concat.DefaultStringSize), false),
+					exprs.NewBound(be.PadOrTrimRight(be.EncodeString("Alice"), concat.DefaultStringSize), false),
+					exprs.NewBound(be.PadOrTrimRight(be.EncodeString("Alice"), concat.DefaultStringSize), false),
 				),
 			},
 		},
 		{
 			name:       "Multiple components equal",
 			components: []concat.Component{concat.NewComponent("Str2"), concat.NewComponent("Int")},
-			args:       []any{indexing.NewEqualLookupExpr("Str2", "Male"), indexing.NewEqualLookupExpr("Int", 30)},
+			args:       []any{exprs.NewNamed("Str2", exprs.NewEqual("Male")), exprs.NewNamed("Int", exprs.NewEqual(30))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					indexing.NewBound(append(be.PadOrTrimRight(be.EncodeString("Male"), concat.DefaultStringSize), be.EncodeInt64(30)...), false),
-					indexing.NewBound(append(be.PadOrTrimRight(be.EncodeString("Male"), concat.DefaultStringSize), be.EncodeInt64(30)...), false),
+					exprs.NewBound(append(be.PadOrTrimRight(be.EncodeString("Male"), concat.DefaultStringSize), be.EncodeInt64(30)...), false),
+					exprs.NewBound(append(be.PadOrTrimRight(be.EncodeString("Male"), concat.DefaultStringSize), be.EncodeInt64(30)...), false),
+				),
+			},
+		},
+		{
+			name:       "Range",
+			components: []concat.Component{concat.NewComponent("Int")},
+			args:       []any{exprs.NewNamed("Int", exprs.NewRange[any](exprs.NewBound[any](0, false), exprs.NewBound[any](30, false)))},
+			want: []indexing.Partition{
+				indexing.NewPartition(
+					exprs.NewBound(be.EncodeInt64(0), false),
+					exprs.NewBound(be.EncodeInt64(30), false),
+				),
+			},
+		},
+		{
+			name:       "In",
+			components: []concat.Component{concat.NewComponent("Int")},
+			args:       []any{exprs.NewNamed("Int", exprs.NewIn(10, 20, 30))},
+			want: []indexing.Partition{
+				indexing.NewPartition(
+					exprs.NewBound(be.EncodeInt64(10), false),
+					exprs.NewBound(be.EncodeInt64(10), false),
+				),
+				indexing.NewPartition(
+					exprs.NewBound(be.EncodeInt64(20), false),
+					exprs.NewBound(be.EncodeInt64(20), false),
+				),
+				indexing.NewPartition(
+					exprs.NewBound(be.EncodeInt64(30), false),
+					exprs.NewBound(be.EncodeInt64(30), false),
 				),
 			},
 		},
 		{
 			name:       "Omitted component",
 			components: []concat.Component{concat.NewComponent("Str1"), concat.NewComponent("Str2")},
-			args:       []any{indexing.NewEqualLookupExpr("Str1", "Alice")},
+			args:       []any{exprs.NewNamed("Str1", exprs.NewEqual("Alice"))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					indexing.NewBound(append(be.PadOrTrimRight(be.EncodeString("Alice"), concat.DefaultStringSize), make([]byte, concat.DefaultStringSize)...), false),
-					indexing.NewBound(append(be.PadOrTrimRight(be.EncodeString("Alice"), concat.DefaultStringSize), bytes.Repeat([]byte{0xff}, concat.DefaultStringSize)...), false),
+					exprs.NewBound(append(be.PadOrTrimRight(be.EncodeString("Alice"), concat.DefaultStringSize), make([]byte, concat.DefaultStringSize)...), false),
+					exprs.NewBound(append(be.PadOrTrimRight(be.EncodeString("Alice"), concat.DefaultStringSize), bytes.Repeat([]byte{0xff}, concat.DefaultStringSize)...), false),
 				),
 			},
 		},
 		{
 			name:       "Nested struct equal",
 			components: []concat.Component{concat.NewComponent("Struct.Test")},
-			args:       []any{indexing.NewEqualLookupExpr("Struct.Test", 42)},
+			args:       []any{exprs.NewNamed("Struct.Test", exprs.NewEqual(42))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					indexing.NewBound(be.EncodeInt64(42), false),
-					indexing.NewBound(be.EncodeInt64(42), false),
+					exprs.NewBound(be.EncodeInt64(42), false),
+					exprs.NewBound(be.EncodeInt64(42), false),
 				),
 			},
 		},
 		{
 			name:       "Pointer to struct equal",
 			components: []concat.Component{concat.NewComponent("Pointer.Test")},
-			args:       []any{indexing.NewEqualLookupExpr("Pointer.Test", 42)},
+			args:       []any{exprs.NewNamed("Pointer.Test", exprs.NewEqual(42))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					indexing.NewBound(be.EncodeInt64(42), false),
-					indexing.NewBound(be.EncodeInt64(42), false),
+					exprs.NewBound(be.EncodeInt64(42), false),
+					exprs.NewBound(be.EncodeInt64(42), false),
 				),
 			},
 		},
 		{
 			name:       "Descending order equal",
 			components: []concat.Component{concat.NewComponent("Int").Desc()},
-			args:       []any{indexing.NewEqualLookupExpr("Int", 30)},
+			args:       []any{exprs.NewNamed("Int", exprs.NewEqual(30))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					indexing.NewBound(be.Inverse(be.EncodeInt64(30)), false),
-					indexing.NewBound(be.Inverse(be.EncodeInt64(30)), false),
+					exprs.NewBound(be.Inverse(be.EncodeInt64(30)), false),
+					exprs.NewBound(be.Inverse(be.EncodeInt64(30)), false),
 				),
 			},
 		},
 		{
 			name:       "Slice equal",
 			components: []concat.Component{concat.NewComponent("StrSlice")},
-			args:       []any{indexing.NewEqualLookupExpr("StrSlice", "Alice")},
+			args:       []any{exprs.NewNamed("StrSlice", exprs.NewEqual("Alice"))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					indexing.NewBound(be.PadOrTrimRight(be.EncodeString("Alice"), concat.DefaultStringSize), false),
-					indexing.NewBound(be.PadOrTrimRight(be.EncodeString("Alice"), concat.DefaultStringSize), false),
+					exprs.NewBound(be.PadOrTrimRight(be.EncodeString("Alice"), concat.DefaultStringSize), false),
+					exprs.NewBound(be.PadOrTrimRight(be.EncodeString("Alice"), concat.DefaultStringSize), false),
 				),
 			},
 		},
 		{
 			name:       "Non-existing field",
 			components: []concat.Component{concat.NewComponent("Str1")},
-			args:       []any{indexing.NewEqualLookupExpr("NonExisting", "Value")},
+			args:       []any{exprs.NewNamed("NonExisting", exprs.NewEqual("Value"))},
 			wantErr:    true,
 		},
 		{
 			name:       "Too many arguments",
 			components: []concat.Component{concat.NewComponent("Str1")},
 			args: []any{
-				indexing.NewEqualLookupExpr("Str1", "Alice"),
-				indexing.NewEqualLookupExpr("Str2", "Bob"),
+				exprs.NewNamed("Str1", exprs.NewEqual("Alice")),
+				exprs.NewNamed("Str2", exprs.NewEqual("Bob")),
 			},
 			wantErr: true,
 		},
 		{
 			name:       "Duplicate path",
 			components: []concat.Component{concat.NewComponent("Str1"), concat.NewComponent("Str2")},
-			args:       []any{indexing.NewEqualLookupExpr("Str1", "Alice"), indexing.NewEqualLookupExpr("Str1", "Bob")},
+			args:       []any{exprs.NewNamed("Str1", exprs.NewEqual("Alice")), exprs.NewNamed("Str1", exprs.NewEqual("Bob"))},
 			wantErr:    true,
 		},
 		{

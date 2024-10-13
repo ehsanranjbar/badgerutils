@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/ehsanranjbar/badgerutils/indexing"
+	"github.com/ehsanranjbar/badgerutils/exprs"
 	"github.com/ehsanranjbar/badgerutils/utils/be"
 	reflectutils "github.com/ehsanranjbar/badgerutils/utils/reflect"
 )
@@ -157,28 +157,27 @@ func (vc *verifiedComponent) encodeValue(v any) ([]byte, error) {
 	return bz, nil
 }
 
-// encodeBounds encodes the given bounds to byte slices.
-func (vc *verifiedComponent) encodeBounds(low, high indexing.Bound[any]) ([]byte, []byte, error) {
+func (vc *verifiedComponent) encodeRange(r exprs.Range[any]) (exprs.Range[[]byte], error) {
 	var (
-		lowBz, highBz []byte
-		err           error
+		low, high []byte
+		err       error
 	)
-	if low.IsEmpty() {
-		lowBz = make([]byte, vc.size)
+	if r.Low().IsEmpty() {
+		low = make([]byte, vc.size)
 	} else {
-		lowBz, err = vc.encodeValue(low.Value())
+		low, err = vc.encodeValue(r.Low().Value())
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to encode low bound: %w", err)
+			return exprs.NewRange[[]byte](nil, nil), fmt.Errorf("failed to encode low bound: %w", err)
 		}
 	}
-	if high.IsEmpty() {
-		highBz = bytes.Repeat([]byte{0xff}, vc.size)
+	if r.High().IsEmpty() {
+		high = bytes.Repeat([]byte{0xff}, vc.size)
 	} else {
-		highBz, err = vc.encodeValue(high.Value())
+		high, err = vc.encodeValue(r.High().Value())
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to encode high bound: %w", err)
+			return exprs.NewRange[[]byte](nil, nil), fmt.Errorf("failed to encode high bound: %w", err)
 		}
 	}
 
-	return lowBz, highBz, nil
+	return exprs.NewRange(exprs.NewBound(low, r.Low().Exclusive()), exprs.NewBound(high, r.High().Exclusive())), nil
 }

@@ -68,13 +68,13 @@ func TestMapValueRetriever_RetrieveValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := indexing.NewMapValueRetriever[Foo](
+			r := indexing.NewMapValueRetriever[Foo](
 				json.Marshal,
 				tt.paths...,
 			)
-			require.NoError(t, err)
 
-			got := r.RetrieveValue(tt.input)
+			got, err := r.RetrieveValue(tt.input)
+			require.NoError(t, err)
 			expectedJson, err := json.Marshal(tt.expected)
 			require.NoError(t, err)
 			require.Equal(t, string(expectedJson), string(got))

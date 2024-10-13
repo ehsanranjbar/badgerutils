@@ -9,6 +9,7 @@ import (
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
+	"github.com/ehsanranjbar/badgerutils/exprs"
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	extstore "github.com/ehsanranjbar/badgerutils/store/extensible"
@@ -64,7 +65,7 @@ func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partitio
 	}
 
 	high := be.Increment(bytes.Clone(low))
-	return iters.Slice([]indexing.Partition{indexing.NewPartition(indexing.NewBound(low, false), indexing.NewBound(high, true))}), nil
+	return iters.Slice([]indexing.Partition{indexing.NewPartition(exprs.NewBound(low, false), exprs.NewBound(high, true))}), nil
 }
 
 func TestObjectStore(t *testing.T) {

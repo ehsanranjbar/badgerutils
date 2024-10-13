@@ -2,56 +2,21 @@ package indexing
 
 import (
 	"bytes"
-	"encoding/hex"
-	"strings"
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
+	"github.com/ehsanranjbar/badgerutils/exprs"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
 	"github.com/ehsanranjbar/badgerutils/utils/be"
 )
 
 // Partition represents a range of keys from low to high with optional exclusivity on both ends.
-type Partition struct {
-	low, high Bound[[]byte]
-}
+type Partition = exprs.Range[[]byte]
 
 // NewPartition creates a new partition with the given low and high keys and exclusivity.
-func NewPartition(low, high Bound[[]byte]) Partition {
-	return Partition{
-		low:  low,
-		high: high,
-	}
-}
-
-// String returns the string representation of the partition.
-func (p Partition) String() string {
-	var sb strings.Builder
-	if p.low.exclusive {
-		sb.WriteString("(")
-	} else {
-		sb.WriteString("[")
-	}
-	if p.low.IsEmpty() {
-		sb.WriteString("0x00")
-	} else {
-		sb.WriteString("0x")
-		sb.WriteString(hex.EncodeToString(p.low.value))
-	}
-	sb.WriteString(", ")
-	if p.high.IsEmpty() {
-		sb.WriteString("∞")
-	} else {
-		sb.WriteString("0x")
-		sb.WriteString(hex.EncodeToString(p.high.value))
-	}
-	if p.high.exclusive {
-		sb.WriteString(")")
-	} else {
-		sb.WriteString("]")
-	}
-	return sb.String()
+func NewPartition(low, high *exprs.Bound[[]byte]) Partition {
+	return exprs.NewRange(low, high)
 }
 
 // LookupPartitions returns an iterator that iterates over the keys in the given partition iterator.
@@ -75,50 +40,59 @@ func LookupPartitions(
 			if opts.Reverse {
 				// Special case for reverse iteration with non-empty high bound that happens with reference stores
 				// Because we want to seek and sever base on prefixes instead of the actual keys.
-				s := p.high.value
-				if !p.high.IsEmpty() && !p.high.Exclusive() {
-					s = be.Increment(bytes.Clone(p.high.value))
-				}
+				var s []byte = nil
+				if !p.High().IsEmpty() {
+					s = p.High().Value()
 
+					if !p.High().Exclusive() {
+						s = be.Increment(bytes.Clone(p.High().Value()))
+					}
+				}
 				iter = iters.RewindSeek(iter, s)
-				if !p.high.IsEmpty() {
+
+				if !p.High().IsEmpty() {
 					iter = iters.Skip(iter, func(_ struct{}, key []byte, _ []byte, _ *badger.Item) (struct{}, bool) {
-						if p.high.Exclusive() {
-							return struct{}{}, bytes.Compare(key, p.high.value) >= 0
+						if p.High().Exclusive() {
+							return struct{}{}, bytes.Compare(key, p.High().Value()) >= 0
 						} else {
-							return struct{}{}, bytes.Compare(key, p.high.value) > 0
+							return struct{}{}, bytes.Compare(key, p.High().Value()) > 0
 						}
 					})
 				}
 			} else {
-				iter = iters.RewindSeek(iter, p.low.value)
-				if p.low.Exclusive() {
+				var e []byte = nil
+				if !p.Low().IsEmpty() {
+					e = p.Low().Value()
+				}
+				iter = iters.RewindSeek(iter, e)
+
+				if !p.Low().IsEmpty() && p.Low().Exclusive() {
 					iter = iters.Skip(iter, func(_ struct{}, key []byte, _ []byte, _ *badger.Item) (struct{}, bool) {
-						return struct{}{}, bytes.Equal(key, p.low.value)
+						return struct{}{}, bytes.Equal(key, p.Low().Value())
 					})
 				}
 			}
 
 			return iters.Sever(iter, func(key []byte, _ []byte, _ *badger.Item) bool {
 				if opts.Reverse {
-					if p.low.IsEmpty() {
+					if p.Low().IsEmpty() {
 						return false
 					}
 
-					if p.low.Exclusive() {
-						return bytes.Compare(key, p.low.value) <= 0
+					if p.Low().Exclusive() {
+						return bytes.Compare(key, p.Low().Value()) <= 0
 					} else {
-						return bytes.Compare(key, p.low.value) < 0
+						return bytes.Compare(key, p.Low().Value()) < 0
 					}
 				} else {
-					if p.high.IsEmpty() {
+					if p.High().IsEmpty() {
 						return false
 					}
 
-					if p.high.Exclusive() {
-						return bytes.Compare(key, p.high.value) >= 0
+					if p.High().Exclusive() {
+						return bytes.Compare(key, p.High().Value()) >= 0
 					} else {
-						return bytes.Compare(key, p.high.value) > 0
+						return bytes.Compare(key, p.High().Value()) > 0
 					}
 				}
 			}), nil
