@@ -5,10 +5,10 @@ import (
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
+	"github.com/ehsanranjbar/badgerutils/codec/be"
 	"github.com/ehsanranjbar/badgerutils/exprs"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
-	"github.com/ehsanranjbar/badgerutils/utils/be"
 )
 
 // Partition represents a range of keys from low to high with optional exclusivity on both ends.
@@ -45,7 +45,7 @@ func LookupPartitions(
 					s = p.High().Value()
 
 					if !p.High().Exclusive() {
-						s = be.Increment(bytes.Clone(p.High().Value()))
+						s = be.IncrementLex(bytes.Clone(p.High().Value()))
 					}
 				}
 				iter = iters.RewindSeek(iter, s)

@@ -1,45 +1,33 @@
 package concat
 
 import (
+	"bytes"
 	"fmt"
-	"reflect"
 
 	"github.com/ehsanranjbar/badgerutils"
+	"github.com/ehsanranjbar/badgerutils/codec"
 	"github.com/ehsanranjbar/badgerutils/exprs"
 	"github.com/ehsanranjbar/badgerutils/iters"
-	reflectutils "github.com/ehsanranjbar/badgerutils/utils/reflect"
 )
 
 // Indexer is an indexer for a struct type that generates keys base on struct fields for a btree index.
 type Indexer[T any] struct {
-	components []*verifiedComponent
+	components []Component
+	extractor  codec.PathExtractor[T, [][]byte]
+	codec      *codec.Codec
 }
 
 // New creates a new indexer for the given struct type and components.
-func New[T any](comps ...Component) (*Indexer[T], error) {
-	rt := reflect.TypeFor[T]()
-	if reflectutils.GetBaseType(rt).Kind() != reflect.Struct {
-		return nil, fmt.Errorf("indexer only supports struct types but got %s", rt)
-	}
-
-	vcs, err := verifyComponents(rt, comps)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Indexer[T]{components: vcs}, nil
-}
-
-func verifyComponents(t reflect.Type, comps []Component) ([]*verifiedComponent, error) {
-	vcs := make([]*verifiedComponent, len(comps))
-	for i, comp := range comps {
-		vc, err := comp.verify(t)
-		if err != nil {
-			return nil, err
-		}
-		vcs[i] = vc
-	}
-	return vcs, nil
+func New[T any](
+	extractor codec.PathExtractor[T, [][]byte],
+	codec *codec.Codec,
+	comps ...Component,
+) (*Indexer[T], error) {
+	return &Indexer[T]{
+		components: comps,
+		extractor:  extractor,
+		codec:      codec,
+	}, nil
 }
 
 // Index implements the Indexer interface.
@@ -48,8 +36,7 @@ func (si *Indexer[T]) Index(v *T, set bool) ([]badgerutils.RawKVPair, error) {
 		return nil, nil
 	}
 
-	rf := reflect.ValueOf(v).Elem()
-	keys, err := si.composeKeys(rf)
+	keys, err := si.composeKeys(*v)
 	if err != nil {
 		return nil, err
 	}
@@ -61,17 +48,16 @@ func (si *Indexer[T]) Index(v *T, set bool) ([]badgerutils.RawKVPair, error) {
 	return pairs, nil
 }
 
-func (si *Indexer[T]) composeKeys(rf reflect.Value) ([][]byte, error) {
+func (si *Indexer[T]) composeKeys(v T) ([][]byte, error) {
 	var keys [][]byte
 	for _, comp := range si.components {
-		v, ok := reflectutils.SafeFieldByIndex(rf, comp.fieldIndex)
-		if !ok {
-			return nil, fmt.Errorf("failed to get field by index %v", comp.fieldIndex)
+		suffixes, err := si.extractor.ExtractPath(v, comp.path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract path %s: %w", comp.path, err)
 		}
 
-		suffixes, err := comp.encode(v.Interface())
-		if err != nil {
-			return nil, err
+		for i, s := range suffixes {
+			suffixes[i] = comp.postProcess(s)
 		}
 
 		if len(keys) == 0 {
@@ -117,14 +103,14 @@ func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[exprs.Range[[]by
 
 		switch e := e.(type) {
 		case exprs.Equal:
-			v, err := comp.encodeValue(e.Value())
+			v, err := si.encodeValue(comp, e.Value())
 			if err != nil {
 				return nil, fmt.Errorf("failed to encode value for %s: %w", comp.path, err)
 			}
 
 			pars = propagateRanges(pars, exprs.NewRange(exprs.NewBound(v, false), exprs.NewBound(v, false)))
 		case exprs.Range[any]:
-			r, err := comp.encodeRange(e)
+			r, err := si.encodeRange(comp, e)
 			if err != nil {
 				return nil, fmt.Errorf("failed to encode range for %s: %w", comp.path, err)
 			}
@@ -133,7 +119,7 @@ func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[exprs.Range[[]by
 		case exprs.In:
 			ranges := make([]exprs.Range[[]byte], 0, len(e.Values()))
 			for _, v := range e.Values() {
-				bz, err := comp.encodeValue(v)
+				bz, err := si.encodeValue(comp, v)
 				if err != nil {
 					return nil, fmt.Errorf("failed to encode value for %s: %w", comp.path, err)
 				}
@@ -148,6 +134,42 @@ func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[exprs.Range[[]by
 	}
 
 	return iters.Slice(pars), nil
+}
+
+func (si *Indexer[T]) encodeValue(comp Component, v any) ([]byte, error) {
+	bz, err := si.codec.Encode(v)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode value: %w", err)
+	}
+
+	bz = comp.postProcess(bz)
+
+	return bz, nil
+}
+
+func (si *Indexer[T]) encodeRange(comp Component, r exprs.Range[any]) (exprs.Range[[]byte], error) {
+	var (
+		low, high []byte
+		err       error
+	)
+	if r.Low().IsEmpty() {
+		low = make([]byte, comp.size)
+	} else {
+		low, err = si.encodeValue(comp, r.Low().Value())
+		if err != nil {
+			return exprs.NewRange[[]byte](nil, nil), fmt.Errorf("failed to encode low bound: %w", err)
+		}
+	}
+	if r.High().IsEmpty() {
+		high = bytes.Repeat([]byte{0xff}, comp.size)
+	} else {
+		high, err = si.encodeValue(comp, r.High().Value())
+		if err != nil {
+			return exprs.NewRange[[]byte](nil, nil), fmt.Errorf("failed to encode high bound: %w", err)
+		}
+	}
+
+	return exprs.NewRange(exprs.NewBound(low, r.Low().Exclusive()), exprs.NewBound(high, r.High().Exclusive())), nil
 }
 
 func (si *Indexer[T]) verifyExprs(args []any) (map[string]any, error) {
@@ -174,10 +196,10 @@ func (si *Indexer[T]) verifyExprs(args []any) (map[string]any, error) {
 	return exs, nil
 }
 
-func (si *Indexer[T]) findComponent(path string) *verifiedComponent {
+func (si *Indexer[T]) findComponent(path string) *Component {
 	for _, comp := range si.components {
 		if comp.path == path {
-			return comp
+			return &comp
 		}
 	}
 	return nil

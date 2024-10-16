@@ -2,10 +2,9 @@ package indexing
 
 import (
 	"fmt"
-	"reflect"
 
 	"github.com/ehsanranjbar/badgerutils"
-	reflectutils "github.com/ehsanranjbar/badgerutils/utils/reflect"
+	"github.com/ehsanranjbar/badgerutils/codec"
 )
 
 // Indexer is a wrapper around an Indexer that injects custom values to the indexes.
@@ -14,6 +13,7 @@ type ValueInjector[T any] struct {
 	retriever ValueRetriever[T]
 }
 
+// NewValueInjector creates a new value injector for the given indexer and value retriever
 func NewValueInjector[T any](
 	indexer Indexer[T],
 	retriever ValueRetriever[T],
@@ -68,59 +68,41 @@ type ValueRetriever[T any] interface {
 
 // MapValueRetriever is a value retriever that retrieves the given field paths of struct and encodes them to bytes.
 type MapValueRetriever[T any] struct {
-	fields  map[string][]int
-	encoder func(v any) ([]byte, error)
+	extractor codec.PathExtractor[T, any]
+	encoder   func(any) ([]byte, error)
+	paths     []string
 }
 
 // NewMapValueRetriever creates a new map value retriever for the given struct type and field paths.
 func NewMapValueRetriever[T any](
-	encoder func(v any) ([]byte, error),
+	extractor codec.PathExtractor[T, any],
+	encoder func(any) ([]byte, error),
 	paths ...string,
 ) *MapValueRetriever[T] {
+	if extractor == nil {
+		panic("extractor is required")
+	}
 	if encoder == nil {
 		panic("encoder is required")
 	}
 
-	var t T
-	reflectType := reflect.TypeOf(t)
-	if reflectutils.GetBaseType(reflectType).Kind() != reflect.Struct {
-		panic("map value retriever only supports struct types")
-	}
-
-	fields, err := extractFields(reflectType, paths)
-	if err != nil {
-		return nil
-	}
-
 	return &MapValueRetriever[T]{
-		encoder: encoder,
-		fields:  fields,
+		extractor: extractor,
+		encoder:   encoder,
+		paths:     paths,
 	}
-}
-
-func extractFields(t reflect.Type, paths []string) (map[string][]int, error) {
-	fields := make(map[string][]int)
-	for _, path := range paths {
-		_, index, err := reflectutils.ExtractPath(t, path)
-		if err != nil {
-			return nil, err
-		}
-		fields[path] = index
-	}
-	return fields, nil
 }
 
 // RetrieveValue implements the ValueRetriever interface.
 func (r *MapValueRetriever[T]) RetrieveValue(v *T) ([]byte, error) {
 	m := map[string]any{}
 	if v != nil {
-		for path, fi := range r.fields {
-			f, ok := reflectutils.SafeFieldByIndex(reflect.ValueOf(v).Elem(), fi)
-			if ok {
-				m[path] = f.Interface()
-			} else {
-				m[path] = nil
+		for _, path := range r.paths {
+			a, err := r.extractor.ExtractPath(*v, path)
+			if err != nil {
+				return nil, fmt.Errorf("failed to extract path %s: %v", path, err)
 			}
+			m[path] = a
 		}
 	}
 	b, err := r.encoder(m)

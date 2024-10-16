@@ -4,80 +4,85 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/indexing"
+	"github.com/ehsanranjbar/badgerutils/testutils/mocks"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-func TestMapValueRetriever_RetrieveValue(t *testing.T) {
-	type Bar struct {
-		C int
-	}
-
-	type Foo struct {
-		A string
-		B *Bar
-	}
-
+func TestValueInjector_Index(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    *Foo
 		paths    []string
-		expected map[string]any
+		input    *struct{}
+		set      bool
+		expected []byte
 	}{
 		{
-			name: "Retrieve single field",
-			input: &Foo{
-				A: "test",
-			},
-			paths: []string{"A"},
-			expected: map[string]any{
-				"A": "test",
-			},
+			name:     "Single path",
+			paths:    []string{"A"},
+			input:    &struct{}{},
+			set:      true,
+			expected: []byte(`{"A":"test"}`),
 		},
 		{
-			name: "Retrieve nested field",
-			input: &Foo{
-				A: "test",
-				B: &Bar{
-					C: 123,
-				},
-			},
-			paths: []string{"A", "B.C"},
-			expected: map[string]any{
-				"A":   "test",
-				"B.C": 123,
-			},
-		},
-		{
-			name: "Nil pointer",
-			input: &Foo{
-				A: "test",
-			},
-			paths: []string{"B.C"},
-			expected: map[string]any{
-				"B.C": nil,
-			},
+			name:     "Multiple paths",
+			paths:    []string{"A", "B.C"},
+			input:    &struct{}{},
+			set:      true,
+			expected: []byte(`{"A":"test","B.C":123}`),
 		},
 		{
 			name:     "Nil",
-			input:    nil,
 			paths:    []string{"A"},
-			expected: map[string]any{},
+			input:    nil,
+			set:      true,
+			expected: []byte(`{}`),
+		},
+		{
+			name:     "Not set",
+			paths:    []string{"A"},
+			input:    &struct{}{},
+			set:      false,
+			expected: []byte(""),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := indexing.NewMapValueRetriever[Foo](
+			idx := mocks.NewMockIndexer[struct{}](t)
+			idx.
+				EXPECT().
+				Index(mock.Anything, mock.Anything).
+				Return([]badgerutils.RawKVPair{
+					{Key: []byte("key1")},
+					{Key: []byte("key2")},
+				}, nil).
+				Maybe()
+			pe := mocks.NewMockPathExtractor[struct{}, any](t)
+			pe.
+				EXPECT().
+				ExtractPath(mock.Anything, "A").
+				Return("test", nil).
+				Maybe()
+			pe.
+				EXPECT().
+				ExtractPath(mock.Anything, "B.C").
+				Return(123, nil).
+				Maybe()
+			vr := indexing.NewMapValueRetriever(
+				pe,
 				json.Marshal,
 				tt.paths...,
 			)
+			vi := indexing.NewValueInjector[struct{}](idx, vr)
 
-			got, err := r.RetrieveValue(tt.input)
+			got, err := vi.Index(tt.input, tt.set)
 			require.NoError(t, err)
-			expectedJson, err := json.Marshal(tt.expected)
-			require.NoError(t, err)
-			require.Equal(t, string(expectedJson), string(got))
+			for _, kv := range got {
+				require.Equal(t, string(tt.expected), string(kv.Value))
+			}
 		})
 	}
 }

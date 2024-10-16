@@ -1,0 +1,13 @@
+with-expecter: true
+filename: "mock_{{.InterfaceName | snakecase}}.go"
+mockname: "Mock{{.InterfaceName}}"
+outpkg: "mocks"
+dir: "testutils/mocks"
+packages:
+  github.com/ehsanranjbar/badgerutils/indexing:
+    interfaces:
+      Indexer:
+      ValueRetriever:
+  github.com/ehsanranjbar/badgerutils/codec:
+    interfaces:
+      PathExtractor:
