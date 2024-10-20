@@ -6,6 +6,7 @@ import (
 
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/codec"
+	"github.com/ehsanranjbar/badgerutils/codec/lex"
 	"github.com/ehsanranjbar/badgerutils/exprs"
 	"github.com/ehsanranjbar/badgerutils/iters"
 )
@@ -13,20 +14,17 @@ import (
 // Indexer is an indexer for a struct type that generates keys base on struct fields for a btree index.
 type Indexer[T any] struct {
 	components []Component
-	extractor  codec.PathExtractor[T, [][]byte]
-	codec      *codec.Codec
+	extractor  codec.PathExtractor[T, []lex.Value]
 }
 
 // New creates a new indexer for the given struct type and components.
 func New[T any](
-	extractor codec.PathExtractor[T, [][]byte],
-	codec *codec.Codec,
+	extractor codec.PathExtractor[T, []lex.Value],
 	comps ...Component,
 ) (*Indexer[T], error) {
 	return &Indexer[T]{
 		components: comps,
 		extractor:  extractor,
-		codec:      codec,
 	}, nil
 }
 
@@ -51,13 +49,14 @@ func (si *Indexer[T]) Index(v *T, set bool) ([]badgerutils.RawKVPair, error) {
 func (si *Indexer[T]) composeKeys(v T) ([][]byte, error) {
 	var keys [][]byte
 	for _, comp := range si.components {
-		suffixes, err := si.extractor.ExtractPath(v, comp.path)
+		values, err := si.extractor.ExtractPath(v, comp.path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to extract path %s: %w", comp.path, err)
 		}
 
-		for i, s := range suffixes {
-			suffixes[i] = comp.postProcess(s)
+		suffixes := make([][]byte, len(values))
+		for i := 0; i < len(values); i++ {
+			suffixes[i] = comp.postProcess(values[i])
 		}
 
 		if len(keys) == 0 {
@@ -98,32 +97,25 @@ func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[exprs.Range[[]by
 	for _, comp := range si.components {
 		e, ok := exs[comp.path]
 		if !ok {
-			e = exprs.NewRange[any](nil, nil)
+			e = exprs.NewRange[lex.Value](nil, nil)
 		}
 
 		switch e := e.(type) {
-		case exprs.Equal:
-			v, err := si.encodeValue(comp, e.Value())
-			if err != nil {
-				return nil, fmt.Errorf("failed to encode value for %s: %w", comp.path, err)
-			}
+		case exprs.Equal[lex.Value]:
+			v := comp.postProcess(e.Value())
 
 			pars = propagateRanges(pars, exprs.NewRange(exprs.NewBound(v, false), exprs.NewBound(v, false)))
-		case exprs.Range[any]:
+		case exprs.Range[lex.Value]:
 			r, err := si.encodeRange(comp, e)
 			if err != nil {
 				return nil, fmt.Errorf("failed to encode range for %s: %w", comp.path, err)
 			}
 
 			pars = propagateRanges(pars, r)
-		case exprs.In:
+		case exprs.In[lex.Value]:
 			ranges := make([]exprs.Range[[]byte], 0, len(e.Values()))
 			for _, v := range e.Values() {
-				bz, err := si.encodeValue(comp, v)
-				if err != nil {
-					return nil, fmt.Errorf("failed to encode value for %s: %w", comp.path, err)
-				}
-
+				bz := comp.postProcess(v)
 				ranges = append(ranges, exprs.NewRange(exprs.NewBound(bz, false), exprs.NewBound(bz, false)))
 			}
 
@@ -136,37 +128,26 @@ func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[exprs.Range[[]by
 	return iters.Slice(pars), nil
 }
 
-func (si *Indexer[T]) encodeValue(comp Component, v any) ([]byte, error) {
-	bz, err := si.codec.Encode(v)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode value: %w", err)
-	}
-
-	bz = comp.postProcess(bz)
-
-	return bz, nil
-}
-
-func (si *Indexer[T]) encodeRange(comp Component, r exprs.Range[any]) (exprs.Range[[]byte], error) {
-	var (
-		low, high []byte
-		err       error
-	)
+func (si *Indexer[T]) encodeRange(comp Component, r exprs.Range[lex.Value]) (exprs.Range[[]byte], error) {
+	var low, high []byte
 	if r.Low().IsEmpty() {
-		low = make([]byte, comp.size)
-	} else {
-		low, err = si.encodeValue(comp, r.Low().Value())
-		if err != nil {
-			return exprs.NewRange[[]byte](nil, nil), fmt.Errorf("failed to encode low bound: %w", err)
+		if comp.descending {
+			low = bytes.Repeat([]byte{0xff}, comp.size)
+		} else {
+			low = make([]byte, comp.size)
 		}
+	} else {
+		low = comp.postProcess(r.Low().Value())
 	}
+
 	if r.High().IsEmpty() {
-		high = bytes.Repeat([]byte{0xff}, comp.size)
-	} else {
-		high, err = si.encodeValue(comp, r.High().Value())
-		if err != nil {
-			return exprs.NewRange[[]byte](nil, nil), fmt.Errorf("failed to encode high bound: %w", err)
+		if comp.descending {
+			high = make([]byte, comp.size)
+		} else {
+			high = bytes.Repeat([]byte{0xff}, comp.size)
 		}
+	} else {
+		high = comp.postProcess(r.High().Value())
 	}
 
 	return exprs.NewRange(exprs.NewBound(low, r.Low().Exclusive()), exprs.NewBound(high, r.High().Exclusive())), nil

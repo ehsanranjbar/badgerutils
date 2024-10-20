@@ -1,14 +1,14 @@
 package exprs
 
 // In represents a set that the value must be in.
-type In struct {
-	values []any
+type In[T any] struct {
+	values []T
 }
 
 // NewIn creates a new in expression.
-func NewIn(values ...any) In {
-	return In{values: values}
+func NewIn[T any](values ...T) In[T] {
+	return In[T]{values: values}
 }
 
 // Values returns the values of the in expression.
-func (i In) Values() []any { return i.values }
+func (i In[T]) Values() []T { return i.values }

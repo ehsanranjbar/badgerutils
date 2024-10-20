@@ -40,7 +40,7 @@ func (pe ReflectPathExtractor[T]) ExtractPath(v T, path string) (reflect.Value, 
 	rv := reflect.ValueOf(v)
 	for _, i := range indices {
 		var err error
-		rv = unwrapPtrValue(rv).Field(i)
+		rv = unwrapPtr(rv).Field(i)
 		if !rv.IsValid() {
 			return reflect.Value{}, fmt.Errorf("invalid field %d: %w", i, err)
 		}
@@ -56,7 +56,7 @@ func (pe ReflectPathExtractor[T]) verifyPath(path string) ([]int, error) {
 	indices := make([]int, 0)
 	t := pe.rt
 	for _, part := range strings.Split(path, ".") {
-		f, ok := unwrapPtrType(t).FieldByName(part)
+		f, ok := unwrapPtr(t).FieldByName(part)
 		if !ok {
 			return nil, fmt.Errorf("field %s not found in %s", part, t)
 		}
@@ -68,15 +68,12 @@ func (pe ReflectPathExtractor[T]) verifyPath(path string) ([]int, error) {
 	return indices, nil
 }
 
-func unwrapPtrType(t reflect.Type) reflect.Type {
-	for t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-
-	return t
+type reflectPtr[T any] interface {
+	Kind() reflect.Kind
+	Elem() T
 }
 
-func unwrapPtrValue(v reflect.Value) reflect.Value {
+func unwrapPtr[T reflectPtr[T]](v T) T {
 	for v.Kind() == reflect.Ptr {
 		v = v.Elem()
 	}

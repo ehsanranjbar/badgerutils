@@ -9,7 +9,7 @@ import (
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
-	"github.com/ehsanranjbar/badgerutils/codec/be"
+	"github.com/ehsanranjbar/badgerutils/codec/lex"
 	"github.com/ehsanranjbar/badgerutils/exprs"
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/iters"
@@ -64,7 +64,7 @@ func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partitio
 		return nil, fmt.Errorf("invalid index: %s", args[0])
 	}
 
-	high := be.IncrementLex(bytes.Clone(low))
+	high := lex.Increment(bytes.Clone(low))
 	return iters.Slice([]indexing.Partition{indexing.NewPartition(exprs.NewBound(low, false), exprs.NewBound(high, true))}), nil
 }
 

@@ -1,9 +1,7 @@
 package concat
 
 import (
-	"bytes"
-
-	"github.com/ehsanranjbar/badgerutils/codec/be"
+	"github.com/ehsanranjbar/badgerutils/codec/lex"
 )
 
 const (
@@ -39,12 +37,16 @@ func (comp Component) WithSize(size int) Component {
 	return comp
 }
 
-func (comp Component) postProcess(bz []byte) []byte {
+func (comp Component) postProcess(v lex.Value) []byte {
 	if comp.descending {
-		bz = be.InverseLex(bytes.Clone(bz))
+		v = v.Invert()
 	}
 
-	bz = be.PadOrTruncRight(bz, comp.size)
+	v = v.Resize(comp.size)
 
+	bz, err := v.MarshalBinary()
+	if err != nil {
+		panic(err)
+	}
 	return bz
 }

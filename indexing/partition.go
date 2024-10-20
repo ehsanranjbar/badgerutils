@@ -5,7 +5,7 @@ import (
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
-	"github.com/ehsanranjbar/badgerutils/codec/be"
+	"github.com/ehsanranjbar/badgerutils/codec/lex"
 	"github.com/ehsanranjbar/badgerutils/exprs"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
@@ -45,7 +45,7 @@ func LookupPartitions(
 					s = p.High().Value()
 
 					if !p.High().Exclusive() {
-						s = be.IncrementLex(bytes.Clone(p.High().Value()))
+						s = lex.Increment(bytes.Clone(p.High().Value()))
 					}
 				}
 				iter = iters.RewindSeek(iter, s)

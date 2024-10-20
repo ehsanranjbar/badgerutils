@@ -23,13 +23,12 @@ func TestSerializedIterator(t *testing.T) {
 		keys   = [][]byte{[]byte("foo1"), []byte("foo2")}
 		values = []*TestStruct{{A: 1, B: "bar1"}, {A: 2, B: "bar2"}}
 	)
+	for i, key := range keys {
+		err := store.Set(key, values[i])
+		require.NoError(t, err)
+	}
 
 	t.Run("Iterate", func(t *testing.T) {
-		err := store.Set(keys[0], values[0])
-		require.NoError(t, err)
-		err = store.Set(keys[1], values[1])
-		require.NoError(t, err)
-
 		iter := store.NewIterator(badger.DefaultIteratorOptions)
 		defer iter.Close()
 
