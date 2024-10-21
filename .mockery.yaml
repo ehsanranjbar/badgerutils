@@ -2,7 +2,7 @@ with-expecter: true
 filename: "mock_{{.InterfaceName | snakecase}}.go"
 mockname: "Mock{{.InterfaceName}}"
 outpkg: "mocks"
-dir: "testutils/mocks"
+dir: "testutil/mocks"
 packages:
   github.com/ehsanranjbar/badgerutils/indexing:
     interfaces:

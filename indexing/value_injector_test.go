@@ -6,7 +6,7 @@ import (
 
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/indexing"
-	"github.com/ehsanranjbar/badgerutils/testutils/mocks"
+	"github.com/ehsanranjbar/badgerutils/testutil/mocks"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
