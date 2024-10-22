@@ -5,17 +5,13 @@ import (
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils/store/prefix"
+	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestPrefixStore(t *testing.T) {
-	opt := badger.DefaultOptions("").WithInMemory(true)
-	db, err := badger.Open(opt)
-	require.NoError(t, err)
-	defer db.Close()
+	txn := testutil.PrepareTxn(t, true)
 
-	txn := db.NewTransaction(true)
-	defer txn.Discard()
 	store := prefix.New(txn, []byte("prefix"))
 
 	t.Run("Prefix", func(t *testing.T) {

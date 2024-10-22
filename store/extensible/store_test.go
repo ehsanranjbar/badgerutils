@@ -9,6 +9,7 @@ import (
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	extstore "github.com/ehsanranjbar/badgerutils/store/extensible"
+	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,13 +37,8 @@ func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partitio
 }
 
 func TestObjectStore(t *testing.T) {
-	opt := badger.DefaultOptions("").WithInMemory(true)
-	db, err := badger.Open(opt)
-	require.NoError(t, err)
-	defer db.Close()
+	txn := testutil.PrepareTxn(t, true)
 
-	txn := db.NewTransaction(true)
-	defer txn.Discard()
 	store := extstore.New[TestStruct](txn)
 	idx := TestIndexer{}
 	ext := indexing.NewExtension(idx)

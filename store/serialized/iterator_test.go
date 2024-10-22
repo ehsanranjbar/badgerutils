@@ -6,17 +6,13 @@ import (
 	badger "github.com/dgraph-io/badger/v4"
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 	"github.com/ehsanranjbar/badgerutils/store/serialized"
+	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSerializedIterator(t *testing.T) {
-	opt := badger.DefaultOptions("").WithInMemory(true)
-	db, err := badger.Open(opt)
-	require.NoError(t, err)
-	defer db.Close()
+	txn := testutil.PrepareTxn(t, true)
 
-	txn := db.NewTransaction(true)
-	defer txn.Discard()
 	store := serialized.New[TestStruct](txn)
 
 	var (

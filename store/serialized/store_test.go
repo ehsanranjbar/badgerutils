@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils/store/serialized"
+	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,13 +43,8 @@ func (f *FailStruct) UnmarshalBinary(data []byte) error {
 }
 
 func TestSerializedStore(t *testing.T) {
-	opt := badger.DefaultOptions("").WithInMemory(true)
-	db, err := badger.Open(opt)
-	require.NoError(t, err)
-	defer db.Close()
+	txn := testutil.PrepareTxn(t, true)
 
-	txn := db.NewTransaction(true)
-	defer txn.Discard()
 	store := serialized.New[TestStruct](txn)
 	failStore := serialized.New[FailStruct](txn)
 
@@ -65,7 +60,7 @@ func TestSerializedStore(t *testing.T) {
 	})
 
 	t.Run("Set", func(t *testing.T) {
-		err = store.Set(key, value)
+		err := store.Set(key, value)
 		require.NoError(t, err)
 	})
 
@@ -89,12 +84,12 @@ func TestSerializedStore(t *testing.T) {
 	})
 
 	t.Run("UnmarshalFail", func(t *testing.T) {
-		err = failStore.Set(key, &FailStruct{})
+		err := failStore.Set(key, &FailStruct{})
 		require.Error(t, err)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		err = store.Delete(key)
+		err := store.Delete(key)
 		require.NoError(t, err)
 	})
 }

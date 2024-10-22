@@ -8,6 +8,7 @@ import (
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
+	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,13 +37,8 @@ func (t *StructB) UnmarshalBinary(data []byte) error {
 }
 
 func TestMap(t *testing.T) {
-	opt := badger.DefaultOptions("").WithInMemory(true)
-	db, err := badger.Open(opt)
-	require.NoError(t, err)
-	defer db.Close()
+	txn := testutil.PrepareTxn(t, true)
 
-	txn := db.NewTransaction(true)
-	defer txn.Discard()
 	store := sstore.New[StructA](txn)
 
 	var (

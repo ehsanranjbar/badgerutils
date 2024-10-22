@@ -28,7 +28,7 @@ type Store[T encoding.BinaryMarshaler,
 type Extension[T any] interface {
 	Init(store badgerutils.BadgerStore, iter badgerutils.Iterator[*T]) error
 	OnDelete(key []byte, value *T) error
-	OnSet(key []byte, old, new *T) error
+	OnSet(key []byte, old, new *T, opts ...any) error
 	Drop() error
 }
 
@@ -111,7 +111,6 @@ func (s *Store[T, PT]) NewIterator(opts badger.IteratorOptions) badgerutils.Iter
 }
 
 // Set inserts the object into the store as a new object or updates an existing object
-// along with inserting/updating all it's auxiliary references (i.e. secondary indexes).
 func (s *Store[T, PT]) Set(key []byte, obj *T) error {
 	dstore := s.getDataStore()
 	old, err := dstore.Get(key)
@@ -132,13 +131,33 @@ func (s *Store[T, PT]) Set(key []byte, obj *T) error {
 	return nil
 }
 
-func (s *Store[T, PT]) onSet(key []byte, old, new *T) error {
+func (s *Store[T, PT]) SetWithOptions(key []byte, obj *T, opts ...any) error {
+	dstore := s.getDataStore()
+	old, err := dstore.Get(key)
+	if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
+		return fmt.Errorf("failed to get object's data: %w", err)
+	}
+
+	err = s.getDataStore().Set(key, obj)
+	if err != nil {
+		return fmt.Errorf("failed to set object's data: %w", err)
+	}
+
+	err = s.onSet(key, old, obj, opts...)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Store[T, PT]) onSet(key []byte, old, new *T, opts ...any) error {
 	if len(s.exts) == 0 {
 		return nil
 	}
 
 	for name, ext := range s.exts {
-		err := ext.OnSet(key, old, new)
+		err := ext.OnSet(key, old, new, opts...)
 		if err != nil {
 			return fmt.Errorf("failure in running extension %s OnSet: %w", name, err)
 		}

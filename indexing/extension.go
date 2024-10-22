@@ -112,7 +112,7 @@ func (e *Extension[T]) OnDelete(key []byte, value *T) error {
 }
 
 // OnSet implements the extensible.Extension interface.
-func (e *Extension[T]) OnSet(key []byte, old, new *T) error {
+func (e *Extension[T]) OnSet(key []byte, old, new *T, opts ...any) error {
 	store := refstore.New(e.store)
 
 	if old != nil {

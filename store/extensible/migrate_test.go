@@ -11,6 +11,7 @@ import (
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	extstore "github.com/ehsanranjbar/badgerutils/store/extensible"
+	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -72,15 +73,10 @@ func (i StructBIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Parti
 }
 
 func TestMigrate(t *testing.T) {
-	opt := badger.DefaultOptions("").WithInMemory(true)
-	db, err := badger.Open(opt)
-	require.NoError(t, err)
-	defer db.Close()
+	txn := testutil.PrepareTxn(t, true)
 
-	txn := db.NewTransaction(true)
-	defer txn.Discard()
 	storeA := extstore.New[StructA](txn)
-	err = storeA.AddExtension("A", indexing.NewExtension(StructAIndexer{}))
+	err := storeA.AddExtension("A", indexing.NewExtension(StructAIndexer{}))
 	require.NoError(t, err)
 
 	var (

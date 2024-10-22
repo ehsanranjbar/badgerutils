@@ -11,17 +11,12 @@ import (
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
+	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLookupPartitions(t *testing.T) {
-	opt := badger.DefaultOptions("").WithInMemory(true)
-	db, err := badger.Open(opt)
-	require.NoError(t, err)
-	defer db.Close()
-
-	txn := db.NewTransaction(true)
-	defer txn.Discard()
+	txn := testutil.PrepareTxn(t, true)
 
 	store := refstore.New(txn)
 	var n uint64 = 0

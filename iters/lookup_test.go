@@ -4,10 +4,10 @@ import (
 	"encoding/binary"
 	"testing"
 
-	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
+	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,13 +24,8 @@ func (i TestIndexer) Index(v *StructA, update bool) []badgerutils.RawKVPair {
 }
 
 func TestLookupIterator(t *testing.T) {
-	opt := badger.DefaultOptions("").WithInMemory(true)
-	db, err := badger.Open(opt)
-	require.NoError(t, err)
-	defer db.Close()
+	txn := testutil.PrepareTxn(t, true)
 
-	txn := db.NewTransaction(true)
-	defer txn.Discard()
 	store := sstore.New[StructA](txn)
 
 	var (

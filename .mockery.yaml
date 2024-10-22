@@ -11,3 +11,6 @@ packages:
   github.com/ehsanranjbar/badgerutils/codec:
     interfaces:
       PathExtractor:
+  github.com/ehsanranjbar/badgerutils/store/extensible:
+    interfaces:
+      Extension:

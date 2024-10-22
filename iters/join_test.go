@@ -7,17 +7,13 @@ import (
 	"github.com/ehsanranjbar/badgerutils/iters"
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
+	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestJoin(t *testing.T) {
-	opt := badger.DefaultOptions("").WithInMemory(true)
-	db, err := badger.Open(opt)
-	require.NoError(t, err)
-	defer db.Close()
+	txn := testutil.PrepareTxn(t, true)
 
-	txn := db.NewTransaction(true)
-	defer txn.Discard()
 	aStore := sstore.New[StructA](pstore.New(txn, []byte("a")))
 	bStore := sstore.New[StructB](pstore.New(txn, []byte("b")))
 

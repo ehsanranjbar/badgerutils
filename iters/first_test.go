@@ -7,17 +7,13 @@ import (
 	"github.com/ehsanranjbar/badgerutils/iters"
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
+	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestFirst(t *testing.T) {
-	opt := badger.DefaultOptions("").WithInMemory(true)
-	db, err := badger.Open(opt)
-	require.NoError(t, err)
-	defer db.Close()
+	txn := testutil.PrepareTxn(t, true)
 
-	txn := db.NewTransaction(true)
-	defer txn.Discard()
 	store := sstore.New[StructA](pstore.New(txn, []byte("v")))
 
 	var (
@@ -41,13 +37,7 @@ func TestFirst(t *testing.T) {
 }
 
 func TestFirstItem(t *testing.T) {
-	opt := badger.DefaultOptions("").WithInMemory(true)
-	db, err := badger.Open(opt)
-	require.NoError(t, err)
-	defer db.Close()
-
-	txn := db.NewTransaction(true)
-	defer txn.Discard()
+	txn := testutil.PrepareTxn(t, true)
 
 	var (
 		keys   = [][]byte{[]byte("foo1"), []byte("foo2")}

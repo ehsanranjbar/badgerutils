@@ -7,6 +7,7 @@ import (
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils/store/serialized"
+	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,13 +36,8 @@ func (s *StructB) UnmarshalBinary(data []byte) error {
 }
 
 func TestMigrate(t *testing.T) {
-	opt := badger.DefaultOptions("").WithInMemory(true)
-	db, err := badger.Open(opt)
-	require.NoError(t, err)
-	defer db.Close()
+	txn := testutil.PrepareTxn(t, true)
 
-	txn := db.NewTransaction(true)
-	defer txn.Discard()
 	storeA := serialized.New[StructA](txn)
 
 	var (
@@ -50,7 +46,7 @@ func TestMigrate(t *testing.T) {
 	)
 
 	for i, key := range keys {
-		err = storeA.Set(key, values[i])
+		err := storeA.Set(key, values[i])
 		require.NoError(t, err)
 	}
 
