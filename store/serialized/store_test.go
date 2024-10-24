@@ -42,7 +42,7 @@ func (f *FailStruct) UnmarshalBinary(data []byte) error {
 	return fmt.Errorf("failed to unmarshal")
 }
 
-func TestSerializedStore(t *testing.T) {
+func TestStore(t *testing.T) {
 	txn := testutil.PrepareTxn(t, true)
 
 	store := serialized.New[TestStruct](txn)

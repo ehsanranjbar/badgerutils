@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSerializedIterator(t *testing.T) {
+func TestIterator(t *testing.T) {
 	txn := testutil.PrepareTxn(t, true)
 
 	store := serialized.New[TestStruct](txn)

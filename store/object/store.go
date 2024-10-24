@@ -1,100 +1,52 @@
 package object
 
 import (
-	"bytes"
 	"encoding"
 	"fmt"
 
+	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/codec"
+	"github.com/ehsanranjbar/badgerutils/extensions"
 	extstore "github.com/ehsanranjbar/badgerutils/store/extensible"
 	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
-	"github.com/vmihailenco/msgpack/v5"
 )
 
 // Object is a generic object that can be stored in a Store.
 type Object[
 	I any,
 	D encoding.BinaryMarshaler,
-	DT sstore.PointerBinaryUnmarshaler[D],
 ] struct {
-	id       *I
-	data     D
-	metadata map[string]any
-}
-
-// ID returns the ID of the object.
-func (o Object[I, D, DT]) ID() *I {
-	return o.id
-}
-
-// Data returns the data of the object.
-func (o Object[I, D, DT]) Data() D {
-	return o.data
-}
-
-// MarshalBinary implements encoding.BinaryMarshaler
-func (o Object[I, D, DT]) MarshalBinary() ([]byte, error) {
-	dataBz, err := o.data.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-
-	enc := msgpack.GetEncoder()
-	defer msgpack.PutEncoder(enc)
-	var buf bytes.Buffer
-	enc.Reset(&buf)
-
-	err = enc.EncodeMulti(dataBz, o.metadata)
-	if err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
-}
-
-// UnmarshalBinary implements encoding.BinaryUnmarshaler
-func (o *Object[I, D, DT]) UnmarshalBinary(bz []byte) error {
-	dec := msgpack.GetDecoder()
-	defer msgpack.PutDecoder(dec)
-	dec.Reset(bytes.NewReader(bz))
-
-	var dataBz []byte
-	err := dec.DecodeMulti(&dataBz, &o.metadata)
-	if err != nil {
-		return err
-	}
-
-	err = DT(&o.data).UnmarshalBinary(dataBz)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	ID       *I             `json:"id,omitempty"`
+	Data     D              `json:"data,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // Store is a generic store for objects.
 type Store[
 	I any,
 	D encoding.BinaryMarshaler,
-	DT sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinaryUnmarshaler[D],
 ] struct {
-	base         *extstore.Store[Object[I, D, DT], *Object[I, D, DT]]
-	idFunc       func(*D) (I, error)
-	idCodec      codec.Codec[I]
-	metadataFunc func(*D) (map[string]any, error)
+	dataStore *extstore.Store[D, PD]
+	metaStore *extensions.AssociateStore[D, extensions.Metadata, *extensions.Metadata]
+	idFunc    func(*D) (I, error)
+	idCodec   codec.Codec[I]
 }
 
-// NewStore creates a new Store.
-func NewStore[
+// New creates a new Store.
+func New[
 	I any,
 	D encoding.BinaryMarshaler,
-	DT sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinaryUnmarshaler[D],
 ](
 	base badgerutils.BadgerStore,
-	opts ...func(*Store[I, D, DT]),
-) *Store[I, D, DT] {
-	s := &Store[I, D, DT]{base: extstore.New[Object[I, D, DT]](base)}
+	opts ...func(*Store[I, D, PD]),
+) (*Store[I, D, PD], error) {
+	s := &Store[I, D, PD]{
+		dataStore: extstore.New[D, PD](base),
+		metaStore: extensions.NewAssociateStore[D, extensions.Metadata, *extensions.Metadata](),
+	}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -106,18 +58,23 @@ func NewStore[
 		}
 	}
 
-	return s
+	err := s.dataStore.AddExtension("meta_associate_store", s.metaStore)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add meta_associate_store extension: %w", err)
+	}
+
+	return s, nil
 }
 
 // WithIDFunc is an option to set the ID function.
 func WithIDFunc[
 	I any,
 	D encoding.BinaryMarshaler,
-	DT sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinaryUnmarshaler[D],
 ](
 	f func(*D) (I, error),
-) func(*Store[I, D, DT]) {
-	return func(s *Store[I, D, DT]) {
+) func(*Store[I, D, PD]) {
+	return func(s *Store[I, D, PD]) {
 		s.idFunc = f
 	}
 }
@@ -126,11 +83,11 @@ func WithIDFunc[
 func WithIDCodec[
 	I any,
 	D encoding.BinaryMarshaler,
-	DT sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinaryUnmarshaler[D],
 ](
 	c codec.Codec[I],
-) func(*Store[I, D, DT]) {
-	return func(s *Store[I, D, DT]) {
+) func(*Store[I, D, PD]) {
+	return func(s *Store[I, D, PD]) {
 		s.idCodec = c
 	}
 }
@@ -139,75 +96,76 @@ func WithIDCodec[
 func WithMetadataFunc[
 	I any,
 	D encoding.BinaryMarshaler,
-	DT sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinaryUnmarshaler[D],
 ](
-	f func(*D) (map[string]any, error),
-) func(*Store[I, D, DT]) {
-	return func(s *Store[I, D, DT]) {
-		s.metadataFunc = f
+	f func(_ []byte, _ *D, _ D, oldU, newU *extensions.Metadata) (*extensions.Metadata, error),
+) func(*Store[I, D, PD]) {
+	return func(s *Store[I, D, PD]) {
+		s.metaStore = extensions.NewAssociateStore[D, extensions.Metadata, *extensions.Metadata](extensions.WithSynthFunc(f))
 	}
 }
 
 // Prefix returns the prefix of the store.
-func (s *Store[I, D, DT]) Prefix() []byte {
-	if pfx, ok := any(s.base).(prefixed); ok {
-		return pfx.Prefix()
-	}
-
-	return nil
-}
-
-type prefixed interface {
-	Prefix() []byte
+func (s *Store[I, D, PD]) Prefix() []byte {
+	return s.dataStore.Prefix()
 }
 
 // Delete deletes the key from the store.
-func (s *Store[I, D, DT]) Delete(id I) error {
+func (s *Store[I, D, PD]) Delete(id I) error {
 	key, err := s.idCodec.Encode(id)
 	if err != nil {
 		return err
 	}
 
-	return s.base.Delete(key)
+	return s.dataStore.Delete(key)
 }
 
 // Get gets the object with given id from the store.
-func (s *Store[I, D, DT]) Get(id I) (*D, error) {
+func (s *Store[I, D, PD]) Get(id I) (*D, error) {
 	key, err := s.idCodec.Encode(id)
 	if err != nil {
 		return nil, err
 	}
 
-	obj, err := s.base.Get(key)
-	if err != nil {
-		return nil, err
-	}
-	if obj == nil {
-		return nil, nil
-	}
-
-	d := obj.Data()
-	return &d, nil
+	return s.dataStore.Get(key)
 }
 
 // GetObject gets the object with given id from the store.
-func (s *Store[I, D, DT]) GetObject(id I) (*Object[I, D, DT], error) {
+func (s *Store[I, D, PD]) GetObject(id I) (*Object[I, D], error) {
 	key, err := s.idCodec.Encode(id)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.base.Get(key)
+	d, err := s.dataStore.Get(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object's data: %w", err)
+	}
+	obj := &Object[I, D]{ID: &id, Data: *d}
+	meta, err := s.metaStore.Get(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object's metadata: %w", err)
+	}
+	if meta != nil {
+		obj.Metadata = *meta
+	}
+
+	return obj, nil
+}
+
+// NewIterator creates a new iterator over the objects.
+func (s *Store[I, D, PD]) NewIterator(opts badger.IteratorOptions) *Iterator[I, D] {
+	return newIterator(s.dataStore.NewIterator(opts), s.idCodec, s.metaStore, true)
 }
 
 // Set sets the object with given id to the store.
-func (s *Store[I, D, DT]) Set(d D, opts ...func(*Object[I, D, DT])) error {
-	obj := &Object[I, D, DT]{data: d}
+func (s *Store[I, D, PD]) Set(d D, opts ...func(*Object[I, D])) error {
+	obj := &Object[I, D]{Data: d}
 	for _, opt := range opts {
 		opt(obj)
 	}
 
-	if obj.id == nil {
+	if obj.ID == nil {
 		if s.idFunc == nil {
 			return fmt.Errorf("no ID function with nil ID")
 		}
@@ -216,17 +174,7 @@ func (s *Store[I, D, DT]) Set(d D, opts ...func(*Object[I, D, DT])) error {
 		if err != nil {
 			return err
 		}
-		obj.id = &id
-	}
-
-	if obj.metadata == nil {
-		if s.metadataFunc != nil {
-			m, err := s.metadataFunc(&d)
-			if err != nil {
-				return err
-			}
-			obj.metadata = m
-		}
+		obj.ID = &id
 	}
 
 	return s.SetObject(obj)
@@ -236,12 +184,12 @@ func (s *Store[I, D, DT]) Set(d D, opts ...func(*Object[I, D, DT])) error {
 func WithID[
 	I any,
 	D encoding.BinaryMarshaler,
-	DT sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinaryUnmarshaler[D],
 ](
 	id I,
-) func(*Object[I, D, DT]) {
-	return func(o *Object[I, D, DT]) {
-		o.id = &id
+) func(*Object[I, D]) {
+	return func(o *Object[I, D]) {
+		o.ID = &id
 	}
 }
 
@@ -249,25 +197,25 @@ func WithID[
 func WithMetadata[
 	I any,
 	D encoding.BinaryMarshaler,
-	DT sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinaryUnmarshaler[D],
 ](
 	m map[string]any,
-) func(*Object[I, D, DT]) {
-	return func(o *Object[I, D, DT]) {
-		o.metadata = m
+) func(*Object[I, D]) {
+	return func(o *Object[I, D]) {
+		o.Metadata = m
 	}
 }
 
 // SetObject sets the object to the store.
-func (s *Store[I, D, DT]) SetObject(obj *Object[I, D, DT]) error {
-	if obj.id == nil {
+func (s *Store[I, D, PD]) SetObject(obj *Object[I, D]) error {
+	if obj.ID == nil {
 		return fmt.Errorf("no ID with nil ID")
 	}
 
-	key, err := s.idCodec.Encode(*obj.id)
+	key, err := s.idCodec.Encode(*obj.ID)
 	if err != nil {
 		return err
 	}
 
-	return s.base.Set(key, obj)
+	return s.dataStore.SetWithOptions(key, &obj.Data, extensions.WithAssociateData(extensions.Metadata(obj.Metadata)))
 }

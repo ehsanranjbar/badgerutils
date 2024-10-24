@@ -24,14 +24,6 @@ type Store[T encoding.BinaryMarshaler,
 	exts map[string]Extension[T]
 }
 
-// Extension is an extension to the object store.
-type Extension[T any] interface {
-	Init(store badgerutils.BadgerStore, iter badgerutils.Iterator[*T]) error
-	OnDelete(key []byte, value *T) error
-	OnSet(key []byte, old, new *T, opts ...any) error
-	Drop() error
-}
-
 // New creates a new ObjectStore.
 func New[T encoding.BinaryMarshaler,
 	PT sstore.PointerBinaryUnmarshaler[T],
@@ -112,25 +104,10 @@ func (s *Store[T, PT]) NewIterator(opts badger.IteratorOptions) badgerutils.Iter
 
 // Set inserts the object into the store as a new object or updates an existing object
 func (s *Store[T, PT]) Set(key []byte, obj *T) error {
-	dstore := s.getDataStore()
-	old, err := dstore.Get(key)
-	if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
-		return fmt.Errorf("failed to get object's data: %w", err)
-	}
-
-	err = s.getDataStore().Set(key, obj)
-	if err != nil {
-		return fmt.Errorf("failed to set object's data: %w", err)
-	}
-
-	err = s.onSet(key, old, obj)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.SetWithOptions(key, obj)
 }
 
+// SetWithOptions inserts the object into the store as a new object or updates an existing object
 func (s *Store[T, PT]) SetWithOptions(key []byte, obj *T, opts ...any) error {
 	dstore := s.getDataStore()
 	old, err := dstore.Get(key)
@@ -157,13 +134,32 @@ func (s *Store[T, PT]) onSet(key []byte, old, new *T, opts ...any) error {
 	}
 
 	for name, ext := range s.exts {
-		err := ext.OnSet(key, old, new, opts...)
+		extOpts := filterOptions(name, opts)
+		err := ext.OnSet(key, old, new, extOpts...)
 		if err != nil {
 			return fmt.Errorf("failure in running extension %s OnSet: %w", name, err)
 		}
 	}
 
 	return nil
+}
+
+func filterOptions(name string, opts []any) []any {
+	var extOpts []any
+
+	for _, opt := range opts {
+		if so, ok := opt.(SpecificOption); ok {
+			if so.extName == name {
+				extOpts = append(extOpts, so.value)
+			} else {
+				continue
+			}
+		}
+
+		extOpts = append(extOpts, opt)
+	}
+
+	return extOpts
 }
 
 // AddExtension adds an extension and feed it all the existing objects.
