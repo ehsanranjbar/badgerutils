@@ -7,7 +7,7 @@ import (
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/codec"
 	"github.com/ehsanranjbar/badgerutils/codec/lex"
-	"github.com/ehsanranjbar/badgerutils/exprs"
+	"github.com/ehsanranjbar/badgerutils/expr"
 	"github.com/ehsanranjbar/badgerutils/iters"
 )
 
@@ -87,36 +87,36 @@ func propagateKeys(keys [][]byte, suffixes [][]byte) [][]byte {
 }
 
 // Lookup implements the Indexer interface.
-func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[exprs.Range[[]byte]], error) {
+func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[expr.Range[[]byte]], error) {
 	exs, err := si.verifyExprs(args)
 	if err != nil {
 		return nil, fmt.Errorf("invalid lookup arguments: %w", err)
 	}
 
-	var pars []exprs.Range[[]byte]
+	var pars []expr.Range[[]byte]
 	for _, comp := range si.components {
 		e, ok := exs[comp.path]
 		if !ok {
-			e = exprs.NewRange[lex.Value](nil, nil)
+			e = expr.NewRange[lex.Value](nil, nil)
 		}
 
 		switch e := e.(type) {
-		case exprs.Equal[lex.Value]:
+		case expr.Equal[lex.Value]:
 			v := comp.postProcess(e.Value())
 
-			pars = propagateRanges(pars, exprs.NewRange(exprs.NewBound(v, false), exprs.NewBound(v, false)))
-		case exprs.Range[lex.Value]:
+			pars = propagateRanges(pars, expr.NewRange(expr.NewBound(v, false), expr.NewBound(v, false)))
+		case expr.Range[lex.Value]:
 			r, err := si.encodeRange(comp, e)
 			if err != nil {
 				return nil, fmt.Errorf("failed to encode range for %s: %w", comp.path, err)
 			}
 
 			pars = propagateRanges(pars, r)
-		case exprs.In[lex.Value]:
-			ranges := make([]exprs.Range[[]byte], 0, len(e.Values()))
+		case expr.In[lex.Value]:
+			ranges := make([]expr.Range[[]byte], 0, len(e.Values()))
 			for _, v := range e.Values() {
 				bz := comp.postProcess(v)
-				ranges = append(ranges, exprs.NewRange(exprs.NewBound(bz, false), exprs.NewBound(bz, false)))
+				ranges = append(ranges, expr.NewRange(expr.NewBound(bz, false), expr.NewBound(bz, false)))
 			}
 
 			pars = propagateRanges(pars, ranges...)
@@ -128,7 +128,7 @@ func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[exprs.Range[[]by
 	return iters.Slice(pars), nil
 }
 
-func (si *Indexer[T]) encodeRange(comp Component, r exprs.Range[lex.Value]) (exprs.Range[[]byte], error) {
+func (si *Indexer[T]) encodeRange(comp Component, r expr.Range[lex.Value]) (expr.Range[[]byte], error) {
 	var low, high []byte
 	if r.Low().IsEmpty() {
 		if comp.descending {
@@ -150,7 +150,7 @@ func (si *Indexer[T]) encodeRange(comp Component, r exprs.Range[lex.Value]) (exp
 		high = comp.postProcess(r.High().Value())
 	}
 
-	return exprs.NewRange(exprs.NewBound(low, r.Low().Exclusive()), exprs.NewBound(high, r.High().Exclusive())), nil
+	return expr.NewRange(expr.NewBound(low, r.Low().Exclusive()), expr.NewBound(high, r.High().Exclusive())), nil
 }
 
 func (si *Indexer[T]) verifyExprs(args []any) (map[string]any, error) {
@@ -160,7 +160,7 @@ func (si *Indexer[T]) verifyExprs(args []any) (map[string]any, error) {
 
 	exs := make(map[string]any)
 	for _, arg := range args {
-		e, ok := arg.(exprs.Named)
+		e, ok := arg.(expr.Named)
 		if !ok {
 			return nil, fmt.Errorf("unsupported argument type %T", arg)
 		}
@@ -186,12 +186,12 @@ func (si *Indexer[T]) findComponent(path string) *Component {
 	return nil
 }
 
-func propagateRanges(pars []exprs.Range[[]byte], elems ...exprs.Range[[]byte]) []exprs.Range[[]byte] {
+func propagateRanges(pars []expr.Range[[]byte], elems ...expr.Range[[]byte]) []expr.Range[[]byte] {
 	if len(pars) == 0 {
 		return elems
 	}
 
-	var newPars []exprs.Range[[]byte]
+	var newPars []expr.Range[[]byte]
 	for _, p := range pars {
 		for _, e := range elems {
 			newPars = append(newPars, appendRange(p, e))
@@ -200,13 +200,13 @@ func propagateRanges(pars []exprs.Range[[]byte], elems ...exprs.Range[[]byte]) [
 	return newPars
 }
 
-func appendRange(p1 exprs.Range[[]byte], p2 exprs.Range[[]byte]) exprs.Range[[]byte] {
-	return exprs.NewRange(
-		exprs.NewBound(
+func appendRange(p1 expr.Range[[]byte], p2 expr.Range[[]byte]) expr.Range[[]byte] {
+	return expr.NewRange(
+		expr.NewBound(
 			append(p1.Low().Value(), p2.Low().Value()...),
 			p1.Low().Exclusive() || p2.Low().Exclusive(),
 		),
-		exprs.NewBound(
+		expr.NewBound(
 			append(p1.High().Value(), p2.High().Value()...),
 			p1.High().Exclusive() || p2.High().Exclusive(),
 		),

@@ -1,4 +1,4 @@
-package exprs
+package expr
 
 // Equal represents an equality expression.
 type Equal[T any] struct {

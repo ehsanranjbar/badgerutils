@@ -1,4 +1,4 @@
-package extensible_test
+package ext_test
 
 import (
 	"encoding/binary"
@@ -10,7 +10,7 @@ import (
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/iters"
-	extstore "github.com/ehsanranjbar/badgerutils/store/extensible"
+	extstore "github.com/ehsanranjbar/badgerutils/store/ext"
 	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/require"
 )

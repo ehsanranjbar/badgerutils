@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/ehsanranjbar/badgerutils/extensions"
+	"github.com/ehsanranjbar/badgerutils/extutil"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	objstore "github.com/ehsanranjbar/badgerutils/store/object"
 	"github.com/ehsanranjbar/badgerutils/testutil"
@@ -32,7 +32,7 @@ func TestStore(t *testing.T) {
 			i++
 			return i, nil
 		}),
-		objstore.WithMetadataFunc[int64](extensions.MetadataSynthFunc[testutil.TestStruct](true)),
+		objstore.WithMetadataFunc[int64](extutil.MetadataSynthFunc[testutil.TestStruct](true)),
 	)
 	require.NoError(t, err)
 
@@ -62,7 +62,7 @@ func TestStore(t *testing.T) {
 		err := store.Set(value1)
 		require.NoError(t, err)
 
-		err = store.Set(value2, objstore.WithID[int64, testutil.TestStruct](key2), objstore.WithMetadata[int64, testutil.TestStruct](extensions.Metadata{"key": "value"}))
+		err = store.Set(value2, objstore.WithID[int64, testutil.TestStruct](key2), objstore.WithMetadata[int64, testutil.TestStruct](extutil.Metadata{"key": "value"}))
 		require.NoError(t, err)
 	})
 

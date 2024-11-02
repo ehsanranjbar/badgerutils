@@ -1,9 +1,9 @@
-package extensions_test
+package extutil_test
 
 import (
 	"testing"
 
-	"github.com/ehsanranjbar/badgerutils/extensions"
+	"github.com/ehsanranjbar/badgerutils/extutil"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 	"github.com/ehsanranjbar/badgerutils/testutil"
@@ -14,9 +14,9 @@ func TestAssociateStore(t *testing.T) {
 	txn := testutil.PrepareTxn(t, true)
 
 	store := pstore.New(txn, []byte("test"))
-	as := extensions.NewAssociateStore(
-		extensions.WithSynthFunc(
-			extensions.MetadataSynthFunc[struct{}](true),
+	as := extutil.NewAssociateStore(
+		extutil.WithSynthFunc(
+			extutil.MetadataSynthFunc[struct{}](true),
 		),
 	)
 
@@ -34,7 +34,7 @@ func TestAssociateStore(t *testing.T) {
 		require.Contains(t, *metadata, "created_at")
 		require.Contains(t, *metadata, "updated_at")
 
-		err = as.OnSet([]byte("key"), &struct{}{}, &struct{}{}, extensions.WithAssociateData(extensions.Metadata{"key": "value"}))
+		err = as.OnSet([]byte("key"), &struct{}{}, &struct{}{}, extutil.WithAssociateData(extutil.Metadata{"key": "value"}))
 		require.NoError(t, err)
 		metadata, err = as.Get([]byte("key"))
 		require.NoError(t, err)

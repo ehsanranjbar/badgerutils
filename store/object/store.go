@@ -11,10 +11,10 @@ import (
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/codec"
-	"github.com/ehsanranjbar/badgerutils/extensions"
+	"github.com/ehsanranjbar/badgerutils/extutil"
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/iters"
-	extstore "github.com/ehsanranjbar/badgerutils/store/extensible"
+	extstore "github.com/ehsanranjbar/badgerutils/store/ext"
 	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
 )
 
@@ -37,7 +37,7 @@ type Store[
 	dataStore     *extstore.Store[D, PD]
 	idFunc        func(*D) (I, error)
 	idCodec       codec.Codec[I]
-	metaStore     *extensions.AssociateStore[D, extensions.Metadata, *extensions.Metadata]
+	metaStore     *extutil.AssociateStore[D, extutil.Metadata, *extutil.Metadata]
 	indexers      map[string]*indexing.Extension[D]
 	extractor     codec.PathExtractor[D, any]
 	flatExtractor codec.PathExtractor[[]byte, any]
@@ -68,7 +68,7 @@ func New[
 	}
 
 	if s.metaStore == nil {
-		s.metaStore = extensions.NewAssociateStore[D, extensions.Metadata]()
+		s.metaStore = extutil.NewAssociateStore[D, extutil.Metadata]()
 	}
 
 	err := s.dataStore.AddExtension("meta_associate_store", s.metaStore)
@@ -123,10 +123,10 @@ func WithMetadataFunc[
 	D encoding.BinaryMarshaler,
 	PD sstore.PointerBinaryUnmarshaler[D],
 ](
-	f func(_ []byte, _ *D, _ D, oldU, newU *extensions.Metadata) (*extensions.Metadata, error),
+	f func(_ []byte, _ *D, _ D, oldU, newU *extutil.Metadata) (*extutil.Metadata, error),
 ) func(*Store[I, D, PD]) {
 	return func(s *Store[I, D, PD]) {
-		s.metaStore = extensions.NewAssociateStore(extensions.WithSynthFunc(f))
+		s.metaStore = extutil.NewAssociateStore(extutil.WithSynthFunc(f))
 	}
 }
 
@@ -286,7 +286,7 @@ func (s *Store[I, D, PD]) SetObject(obj *Object[I, D]) error {
 		return err
 	}
 
-	return s.dataStore.SetWithOptions(key, &obj.Data, extensions.WithAssociateData(extensions.Metadata(obj.Metadata)))
+	return s.dataStore.SetWithOptions(key, &obj.Data, extutil.WithAssociateData(extutil.Metadata(obj.Metadata)))
 }
 
 // AddIndexer adds an indexer to the store.

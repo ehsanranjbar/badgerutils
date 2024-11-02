@@ -1,27 +1,27 @@
-package exprs_test
+package expr_test
 
 import (
 	"testing"
 
-	"github.com/ehsanranjbar/badgerutils/exprs"
+	"github.com/ehsanranjbar/badgerutils/expr"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRangeString(t *testing.T) {
 	tests := []struct {
-		partition exprs.Range[[]byte]
+		partition expr.Range[[]byte]
 		expected  string
 	}{
 		{
-			partition: exprs.NewRange(exprs.NewBound([]byte{0x01}, false), exprs.NewBound([]byte{0x02}, false)),
+			partition: expr.NewRange(expr.NewBound([]byte{0x01}, false), expr.NewBound([]byte{0x02}, false)),
 			expected:  "[0x01, 0x02]",
 		},
 		{
-			partition: exprs.NewRange(exprs.NewBound[[]byte]([]byte{0x01}, true), exprs.NewBound[[]byte]([]byte{0x02}, true)),
+			partition: expr.NewRange(expr.NewBound[[]byte]([]byte{0x01}, true), expr.NewBound[[]byte]([]byte{0x02}, true)),
 			expected:  "(0x01, 0x02)",
 		},
 		{
-			partition: exprs.NewRange[[]byte](nil, nil),
+			partition: expr.NewRange[[]byte](nil, nil),
 			expected:  "[0x00, ∞)",
 		},
 	}

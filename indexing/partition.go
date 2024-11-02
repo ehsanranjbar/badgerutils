@@ -6,17 +6,17 @@ import (
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/codec/lex"
-	"github.com/ehsanranjbar/badgerutils/exprs"
+	"github.com/ehsanranjbar/badgerutils/expr"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
 )
 
 // Partition represents a range of keys from low to high with optional exclusivity on both ends.
-type Partition = exprs.Range[[]byte]
+type Partition = expr.Range[[]byte]
 
 // NewPartition creates a new partition with the given low and high keys and exclusivity.
-func NewPartition(low, high *exprs.Bound[[]byte]) Partition {
-	return exprs.NewRange(low, high)
+func NewPartition(low, high *expr.Bound[[]byte]) Partition {
+	return expr.NewRange(low, high)
 }
 
 // LookupPartitions returns an iterator that iterates over the keys in the given partition iterator.

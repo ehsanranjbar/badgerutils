@@ -8,7 +8,7 @@ import (
 	"github.com/ehsanranjbar/badgerutils/codec"
 	"github.com/ehsanranjbar/badgerutils/codec/be"
 	"github.com/ehsanranjbar/badgerutils/codec/lex"
-	"github.com/ehsanranjbar/badgerutils/exprs"
+	"github.com/ehsanranjbar/badgerutils/expr"
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/indexing/concat"
 	"github.com/ehsanranjbar/badgerutils/iters"
@@ -172,11 +172,11 @@ func TestIndexer_Lookup(t *testing.T) {
 		{
 			name:       "Single component equal",
 			components: []concat.Component{concat.NewComponent("Str1")},
-			args:       []any{exprs.NewNamed("Str1", exprs.NewEqual(lxf.MustLexifyAny("Alice")))},
+			args:       []any{expr.NewNamed("Str1", expr.NewEqual(lxf.MustLexifyAny("Alice")))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					exprs.NewBound(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), false),
-					exprs.NewBound(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), false),
+					expr.NewBound(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), false),
+					expr.NewBound(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), false),
 				),
 			},
 		},
@@ -184,130 +184,130 @@ func TestIndexer_Lookup(t *testing.T) {
 			name:       "Multiple components equal",
 			components: []concat.Component{concat.NewComponent("Str2"), concat.NewComponent("Int").WithSize(8)},
 			args: []any{
-				exprs.NewNamed("Str2", exprs.NewEqual(lxf.MustLexifyAny("Male"))),
-				exprs.NewNamed("Int", exprs.NewEqual(lxf.MustLexifyAny(int(30)))),
+				expr.NewNamed("Str2", expr.NewEqual(lxf.MustLexifyAny("Male"))),
+				expr.NewNamed("Int", expr.NewEqual(lxf.MustLexifyAny(int(30)))),
 			},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					exprs.NewBound(append(be.PadOrTruncRight([]byte("Male"), concat.DefaultMaxComponentSize), lex.EncodeInt64(30)...), false),
-					exprs.NewBound(append(be.PadOrTruncRight([]byte("Male"), concat.DefaultMaxComponentSize), lex.EncodeInt64(30)...), false),
+					expr.NewBound(append(be.PadOrTruncRight([]byte("Male"), concat.DefaultMaxComponentSize), lex.EncodeInt64(30)...), false),
+					expr.NewBound(append(be.PadOrTruncRight([]byte("Male"), concat.DefaultMaxComponentSize), lex.EncodeInt64(30)...), false),
 				),
 			},
 		},
 		{
 			name:       "Range",
 			components: []concat.Component{concat.NewComponent("Int").WithSize(8)},
-			args: []any{exprs.NewNamed(
+			args: []any{expr.NewNamed(
 				"Int",
-				exprs.NewRange(
-					exprs.NewBound(lxf.MustLexifyAny(int(0)), false),
-					exprs.NewBound(lxf.MustLexifyAny(int(30)), false),
+				expr.NewRange(
+					expr.NewBound(lxf.MustLexifyAny(int(0)), false),
+					expr.NewBound(lxf.MustLexifyAny(int(30)), false),
 				),
 			)},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					exprs.NewBound(lex.EncodeInt64(0), false),
-					exprs.NewBound(lex.EncodeInt64(30), false),
+					expr.NewBound(lex.EncodeInt64(0), false),
+					expr.NewBound(lex.EncodeInt64(30), false),
 				),
 			},
 		},
 		{
 			name:       "In",
 			components: []concat.Component{concat.NewComponent("Int").WithSize(8)},
-			args: []any{exprs.NewNamed("Int", exprs.NewIn(
+			args: []any{expr.NewNamed("Int", expr.NewIn(
 				lxf.MustLexifyAny(int(10)),
 				lxf.MustLexifyAny(int(20)),
 				lxf.MustLexifyAny(int(30)),
 			))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					exprs.NewBound(lex.EncodeInt64(10), false),
-					exprs.NewBound(lex.EncodeInt64(10), false),
+					expr.NewBound(lex.EncodeInt64(10), false),
+					expr.NewBound(lex.EncodeInt64(10), false),
 				),
 				indexing.NewPartition(
-					exprs.NewBound(lex.EncodeInt64(20), false),
-					exprs.NewBound(lex.EncodeInt64(20), false),
+					expr.NewBound(lex.EncodeInt64(20), false),
+					expr.NewBound(lex.EncodeInt64(20), false),
 				),
 				indexing.NewPartition(
-					exprs.NewBound(lex.EncodeInt64(30), false),
-					exprs.NewBound(lex.EncodeInt64(30), false),
+					expr.NewBound(lex.EncodeInt64(30), false),
+					expr.NewBound(lex.EncodeInt64(30), false),
 				),
 			},
 		},
 		{
 			name:       "Omitted component",
 			components: []concat.Component{concat.NewComponent("Str1"), concat.NewComponent("Str2")},
-			args:       []any{exprs.NewNamed("Str1", exprs.NewEqual(lxf.MustLexifyAny("Alice")))},
+			args:       []any{expr.NewNamed("Str1", expr.NewEqual(lxf.MustLexifyAny("Alice")))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					exprs.NewBound(append(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), make([]byte, concat.DefaultMaxComponentSize)...), false),
-					exprs.NewBound(append(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), bytes.Repeat([]byte{0xff}, concat.DefaultMaxComponentSize)...), false),
+					expr.NewBound(append(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), make([]byte, concat.DefaultMaxComponentSize)...), false),
+					expr.NewBound(append(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), bytes.Repeat([]byte{0xff}, concat.DefaultMaxComponentSize)...), false),
 				),
 			},
 		},
 		{
 			name:       "Nested struct equal",
 			components: []concat.Component{concat.NewComponent("Struct.Test").WithSize(8)},
-			args:       []any{exprs.NewNamed("Struct.Test", exprs.NewEqual(lxf.MustLexifyAny(int64(42))))},
+			args:       []any{expr.NewNamed("Struct.Test", expr.NewEqual(lxf.MustLexifyAny(int64(42))))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					exprs.NewBound(lex.EncodeInt64(42), false),
-					exprs.NewBound(lex.EncodeInt64(42), false),
+					expr.NewBound(lex.EncodeInt64(42), false),
+					expr.NewBound(lex.EncodeInt64(42), false),
 				),
 			},
 		},
 		{
 			name:       "Pointer to struct equal",
 			components: []concat.Component{concat.NewComponent("Pointer.Test").WithSize(8)},
-			args:       []any{exprs.NewNamed("Pointer.Test", exprs.NewEqual(lxf.MustLexifyAny(int64(42))))},
+			args:       []any{expr.NewNamed("Pointer.Test", expr.NewEqual(lxf.MustLexifyAny(int64(42))))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					exprs.NewBound(lex.EncodeInt64(42), false),
-					exprs.NewBound(lex.EncodeInt64(42), false),
+					expr.NewBound(lex.EncodeInt64(42), false),
+					expr.NewBound(lex.EncodeInt64(42), false),
 				),
 			},
 		},
 		{
 			name:       "Descending order equal",
 			components: []concat.Component{concat.NewComponent("Int").WithSize(8).Desc()},
-			args:       []any{exprs.NewNamed("Int", exprs.NewEqual(lxf.MustLexifyAny(int64(30))))},
+			args:       []any{expr.NewNamed("Int", expr.NewEqual(lxf.MustLexifyAny(int64(30))))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					exprs.NewBound(lex.Invert(lex.EncodeInt64(30)), false),
-					exprs.NewBound(lex.Invert(lex.EncodeInt64(30)), false),
+					expr.NewBound(lex.Invert(lex.EncodeInt64(30)), false),
+					expr.NewBound(lex.Invert(lex.EncodeInt64(30)), false),
 				),
 			},
 		},
 		{
 			name:       "Slice equal",
 			components: []concat.Component{concat.NewComponent("StrSlice")},
-			args:       []any{exprs.NewNamed("StrSlice", exprs.NewEqual(lxf.MustLexifyAny("Alice")))},
+			args:       []any{expr.NewNamed("StrSlice", expr.NewEqual(lxf.MustLexifyAny("Alice")))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
-					exprs.NewBound(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), false),
-					exprs.NewBound(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), false),
+					expr.NewBound(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), false),
+					expr.NewBound(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), false),
 				),
 			},
 		},
 		{
 			name:       "Non-existing field",
 			components: []concat.Component{concat.NewComponent("Str1")},
-			args:       []any{exprs.NewNamed("NonExisting", exprs.NewEqual(lxf.MustLexifyAny("Value")))},
+			args:       []any{expr.NewNamed("NonExisting", expr.NewEqual(lxf.MustLexifyAny("Value")))},
 			wantErr:    true,
 		},
 		{
 			name:       "Too many arguments",
 			components: []concat.Component{concat.NewComponent("Str1")},
 			args: []any{
-				exprs.NewNamed("Str1", exprs.NewEqual(lxf.MustLexifyAny("Alice"))),
-				exprs.NewNamed("Str2", exprs.NewEqual(lxf.MustLexifyAny("Bob"))),
+				expr.NewNamed("Str1", expr.NewEqual(lxf.MustLexifyAny("Alice"))),
+				expr.NewNamed("Str2", expr.NewEqual(lxf.MustLexifyAny("Bob"))),
 			},
 			wantErr: true,
 		},
 		{
 			name:       "Duplicate path",
 			components: []concat.Component{concat.NewComponent("Str1"), concat.NewComponent("Str2")},
-			args:       []any{exprs.NewNamed("Str1", exprs.NewEqual(lxf.MustLexifyAny("Alice"))), exprs.NewNamed("Str1", exprs.NewEqual(lxf.MustLexifyAny("Bob")))},
+			args:       []any{expr.NewNamed("Str1", expr.NewEqual(lxf.MustLexifyAny("Alice"))), expr.NewNamed("Str1", expr.NewEqual(lxf.MustLexifyAny("Bob")))},
 			wantErr:    true,
 		},
 		{

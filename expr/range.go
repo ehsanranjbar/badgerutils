@@ -1,4 +1,4 @@
-package exprs
+package expr
 
 import (
 	"encoding/hex"

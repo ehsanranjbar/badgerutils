@@ -1,4 +1,4 @@
-package exprs
+package expr
 
 // In represents a set that the value must be in.
 type In[T any] struct {

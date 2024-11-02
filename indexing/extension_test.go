@@ -10,10 +10,10 @@ import (
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/codec/lex"
-	"github.com/ehsanranjbar/badgerutils/exprs"
+	"github.com/ehsanranjbar/badgerutils/expr"
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/iters"
-	extstore "github.com/ehsanranjbar/badgerutils/store/extensible"
+	extstore "github.com/ehsanranjbar/badgerutils/store/ext"
 	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -66,7 +66,7 @@ func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partitio
 	}
 
 	high := lex.Increment(bytes.Clone(low))
-	return iters.Slice([]indexing.Partition{indexing.NewPartition(exprs.NewBound(low, false), exprs.NewBound(high, true))}), nil
+	return iters.Slice([]indexing.Partition{indexing.NewPartition(expr.NewBound(low, false), expr.NewBound(high, true))}), nil
 }
 
 func TestObjectStore(t *testing.T) {

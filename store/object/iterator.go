@@ -6,21 +6,21 @@ import (
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/codec"
-	"github.com/ehsanranjbar/badgerutils/extensions"
+	"github.com/ehsanranjbar/badgerutils/extutil"
 )
 
 // Iterator is an iterator that unmarshal id, data and optionally fetch metadata.
 type Iterator[I any, D encoding.BinaryMarshaler] struct {
 	base      badgerutils.Iterator[*D]
 	idCodec   codec.Codec[I]
-	metaStore *extensions.AssociateStore[D, extensions.Metadata, *extensions.Metadata]
+	metaStore *extutil.AssociateStore[D, extutil.Metadata, *extutil.Metadata]
 	fetchMeta bool
 }
 
 func newIterator[I any, D encoding.BinaryMarshaler](
 	base badgerutils.Iterator[*D],
 	idCodec codec.Codec[I],
-	metaStore *extensions.AssociateStore[D, extensions.Metadata, *extensions.Metadata],
+	metaStore *extutil.AssociateStore[D, extutil.Metadata, *extutil.Metadata],
 	fetchMeta bool,
 ) *Iterator[I, D] {
 	return &Iterator[I, D]{

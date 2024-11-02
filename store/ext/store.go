@@ -1,4 +1,4 @@
-package extensible
+package ext
 
 import (
 	"encoding"

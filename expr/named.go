@@ -1,4 +1,4 @@
-package exprs
+package expr
 
 // Named associates a name with an expression.
 type Named struct {

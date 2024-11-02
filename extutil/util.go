@@ -1,4 +1,4 @@
-package extensions
+package extutil
 
 func findAs[T any](anys []any) (t T, ok bool) {
 	for _, a := range anys {
