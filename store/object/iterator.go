@@ -32,8 +32,9 @@ func newIterator[I any, D encoding.BinaryMarshaler](
 }
 
 // FetchMeta sets if the iterator should fetch metadata.
-func (it *Iterator[I, D]) FetchMeta(b bool) {
+func (it *Iterator[I, D]) FetchMeta(b bool) *Iterator[I, D] {
 	it.fetchMeta = b
+	return it
 }
 
 // Close closes the iterator.
@@ -56,15 +57,15 @@ func (it *Iterator[I, D]) Rewind() {
 	it.base.Rewind()
 }
 
-// Seek seeks the key.
-// func (it *Iterator[I, D]) Seek(key I) {
-// 	keyBytes, err := it.idCodec.Encode(key)
-// 	if err != nil {
-// 		panic(err)
-// 	}
+// SeekT seeks the key.
+func (it *Iterator[I, D]) SeekT(key I) {
+	keyBytes, err := it.idCodec.Encode(key)
+	if err != nil {
+		panic(err)
+	}
 
-// 	it.base.Seek(keyBytes)
-// }
+	it.base.Seek(keyBytes)
+}
 
 // Seek seeks the key.
 func (it *Iterator[I, D]) Seek(key []byte) {
@@ -76,16 +77,16 @@ func (it *Iterator[I, D]) Valid() bool {
 	return it.base.Valid()
 }
 
-// Key returns the current key.
-// func (it *Iterator[I, D]) Key() I {
-// 	keyBytes := it.base.Key()
-// 	key, err := it.idCodec.Decode(keyBytes)
-// 	if err != nil {
-// 		panic(err)
-// 	}
+// KeyT returns the current key.
+func (it *Iterator[I, D]) KeyT() I {
+	keyBytes := it.base.Key()
+	key, err := it.idCodec.Decode(keyBytes)
+	if err != nil {
+		panic(err)
+	}
 
-// 	return key
-// }
+	return key
+}
 
 // Key returns the current key.
 func (it *Iterator[I, D]) Key() []byte {

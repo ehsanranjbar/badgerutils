@@ -98,7 +98,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("Query", func(t *testing.T) {
-		iter, err := store.Query("B like \"ba*\" and F.A > 10 and 4 in D")
+		iter, err := store.Query("B like \"ba*\" and F.A > 10 and 4 in D order by A desc")
 		require.NoError(t, err)
 
 		c := iters.ConsumeAndCount(iter)
