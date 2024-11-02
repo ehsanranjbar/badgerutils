@@ -39,8 +39,17 @@ func TestStore(t *testing.T) {
 	var (
 		key1   int64 = 1
 		key2   int64 = 3
-		value1       = testutil.TestStruct{A: 1, B: "bar"}
-		value2       = testutil.TestStruct{A: 2, B: "baz"}
+		value1       = testutil.TestStruct{
+			A: 1,
+			B: "bar",
+			F: &testutil.TestStruct{A: 10},
+		}
+		value2 = testutil.TestStruct{
+			A: 2,
+			B: "baz",
+			D: []int{4, 5, 6},
+			F: &testutil.TestStruct{A: 20},
+		}
 	)
 
 	t.Run("NotFound", func(t *testing.T) {
@@ -86,6 +95,14 @@ func TestStore(t *testing.T) {
 
 		c := iters.ConsumeAndCount(iter)
 		require.Equal(t, uint(2), c)
+	})
+
+	t.Run("Query", func(t *testing.T) {
+		iter, err := store.Query("B like \"ba*\" and F.A > 10 and 4 in D")
+		require.NoError(t, err)
+
+		c := iters.ConsumeAndCount(iter)
+		require.Equal(t, uint(1), c)
 	})
 
 	t.Run("Delete", func(t *testing.T) {

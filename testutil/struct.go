@@ -3,8 +3,12 @@ package testutil
 import "encoding/json"
 
 type TestStruct struct {
-	A int    `json:"a,omitempty"`
-	B string `json:"b,omitempty"`
+	A int            `json:"a,omitempty"`
+	B string         `json:"b,omitempty"`
+	C bool           `json:"c,omitempty"`
+	D []int          `json:"d,omitempty"`
+	E map[string]int `json:"e,omitempty"`
+	F *TestStruct    `json:"f,omitempty"`
 }
 
 func (t TestStruct) MarshalBinary() ([]byte, error) {

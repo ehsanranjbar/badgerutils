@@ -3,11 +3,17 @@ package object
 import (
 	"encoding"
 	"fmt"
+	"time"
 
+	"github.com/araddon/qlbridge/expr"
+	qlvalue "github.com/araddon/qlbridge/value"
+	qlvm "github.com/araddon/qlbridge/vm"
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/codec"
 	"github.com/ehsanranjbar/badgerutils/extensions"
+	"github.com/ehsanranjbar/badgerutils/indexing"
+	"github.com/ehsanranjbar/badgerutils/iters"
 	extstore "github.com/ehsanranjbar/badgerutils/store/extensible"
 	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
 )
@@ -28,10 +34,13 @@ type Store[
 	D encoding.BinaryMarshaler,
 	PD sstore.PointerBinaryUnmarshaler[D],
 ] struct {
-	dataStore *extstore.Store[D, PD]
-	metaStore *extensions.AssociateStore[D, extensions.Metadata, *extensions.Metadata]
-	idFunc    func(*D) (I, error)
-	idCodec   codec.Codec[I]
+	dataStore     *extstore.Store[D, PD]
+	idFunc        func(*D) (I, error)
+	idCodec       codec.Codec[I]
+	metaStore     *extensions.AssociateStore[D, extensions.Metadata, *extensions.Metadata]
+	indexers      map[string]*indexing.Extension[D]
+	extractor     codec.PathExtractor[D, any]
+	flatExtractor codec.PathExtractor[[]byte, any]
 }
 
 // New creates a new Store.
@@ -45,7 +54,7 @@ func New[
 ) (*Store[I, D, PD], error) {
 	s := &Store[I, D, PD]{
 		dataStore: extstore.New[D, PD](base),
-		metaStore: extensions.NewAssociateStore[D, extensions.Metadata, *extensions.Metadata](),
+		indexers:  map[string]*indexing.Extension[D]{},
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -58,9 +67,25 @@ func New[
 		}
 	}
 
+	if s.metaStore == nil {
+		s.metaStore = extensions.NewAssociateStore[D, extensions.Metadata]()
+	}
+
 	err := s.dataStore.AddExtension("meta_associate_store", s.metaStore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add meta_associate_store extension: %w", err)
+	}
+
+	for name, idx := range s.indexers {
+		extName := "idx/" + name
+		err := s.dataStore.AddExtension(extName, idx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add indexer extension %q: %w", name, err)
+		}
+	}
+
+	if s.extractor == nil {
+		s.extractor = codec.NewConvertPathExtractor(codec.NewReflectPathExtractor[D](), codec.ReflectValueToAny)
 	}
 
 	return s, nil
@@ -101,7 +126,51 @@ func WithMetadataFunc[
 	f func(_ []byte, _ *D, _ D, oldU, newU *extensions.Metadata) (*extensions.Metadata, error),
 ) func(*Store[I, D, PD]) {
 	return func(s *Store[I, D, PD]) {
-		s.metaStore = extensions.NewAssociateStore[D, extensions.Metadata, *extensions.Metadata](extensions.WithSynthFunc(f))
+		s.metaStore = extensions.NewAssociateStore(extensions.WithSynthFunc(f))
+	}
+}
+
+// WithIndexer is an option to add an indexer.
+func WithIndexer[
+	I any,
+	D encoding.BinaryMarshaler,
+	PD sstore.PointerBinaryUnmarshaler[D],
+](
+	name string,
+	idx indexing.Indexer[D],
+) func(*Store[I, D, PD]) {
+	return func(s *Store[I, D, PD]) {
+		if _, ok := s.indexers[name]; ok {
+			panic("indexer already exists")
+		}
+
+		s.indexers[name] = indexing.NewExtension(idx)
+	}
+}
+
+// WithExtractor is an option to set the extractor.
+func WithExtractor[
+	I any,
+	D encoding.BinaryMarshaler,
+	PD sstore.PointerBinaryUnmarshaler[D],
+](
+	e codec.PathExtractor[D, any],
+) func(*Store[I, D, PD]) {
+	return func(s *Store[I, D, PD]) {
+		s.extractor = e
+	}
+}
+
+// WithFlatExtractor is an option to set the flat extractor.
+func WithFlatExtractor[
+	I any,
+	D encoding.BinaryMarshaler,
+	PD sstore.PointerBinaryUnmarshaler[D],
+](
+	e codec.PathExtractor[[]byte, any],
+) func(*Store[I, D, PD]) {
+	return func(s *Store[I, D, PD]) {
+		s.flatExtractor = e
 	}
 }
 
@@ -219,3 +288,75 @@ func (s *Store[I, D, PD]) SetObject(obj *Object[I, D]) error {
 
 	return s.dataStore.SetWithOptions(key, &obj.Data, extensions.WithAssociateData(extensions.Metadata(obj.Metadata)))
 }
+
+// AddIndexer adds an indexer to the store.
+func (s *Store[I, D, PD]) AddIndexer(name string, idx indexing.Indexer[D]) error {
+	if _, ok := s.indexers[name]; ok {
+		return fmt.Errorf("indexer %q already exists", name)
+	}
+
+	idxExt := indexing.NewExtension(idx)
+	extName := "idx/" + name
+	err := s.dataStore.AddExtension(extName, idxExt)
+	if err != nil {
+		return fmt.Errorf("failed to add indexer extension %q: %w", name, err)
+	}
+
+	s.indexers[name] = idxExt
+	return nil
+}
+
+// Indexer returns the indexer with given name.
+func (s *Store[I, D, PD]) Indexer(name string) *indexing.Extension[D] {
+	idx, ok := s.indexers[name]
+	if !ok {
+		return nil
+	}
+
+	return idx
+}
+
+// Query returns the query for the store.
+func (s *Store[I, D, PD]) Query(q string) (badgerutils.Iterator[*Object[I, D]], error) {
+	qe, err := expr.ParseExpression(q)
+	if err != nil {
+		return nil, err
+	}
+
+	return iters.Filter(s.NewIterator(badger.DefaultIteratorOptions), func(o *Object[I, D], _ *badger.Item) bool {
+		ctx := &qlObjectContextReader[I, D]{
+			id:        o.ID,
+			d:         o.Data,
+			extractor: s.extractor,
+		}
+		t, _ := qlvm.MatchesExpr(ctx, qe)
+		return t
+	}), nil
+}
+
+type qlObjectContextReader[I, D any] struct {
+	id        *I
+	d         D
+	extractor codec.PathExtractor[D, any]
+}
+
+// Get implements the qlbridge.ContextReader interface.
+func (r *qlObjectContextReader[I, D]) Get(key string) (qlvalue.Value, bool) {
+	if key == "id" {
+		return qlvalue.NewValue(r.id), true
+	}
+
+	v, err := r.extractor.ExtractPath(r.d, key)
+	if err != nil {
+		return qlvalue.NewErrorValue(err), true
+	}
+	return qlvalue.NewValue(v), true
+}
+
+// Row implements the qlbridge.ContextReader interface.
+// I don't know what this is supposed to do.
+func (r *qlObjectContextReader[I, D]) Row() map[string]qlvalue.Value { return nil }
+
+// Ts implements the qlbridge.ContextReader interface.
+// I don't know what this is supposed to do.
+func (r *qlObjectContextReader[I, D]) Ts() time.Time { return time.Time{} }

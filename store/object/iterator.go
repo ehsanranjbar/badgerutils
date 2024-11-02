@@ -57,13 +57,18 @@ func (it *Iterator[I, D]) Rewind() {
 }
 
 // Seek seeks the key.
-func (it *Iterator[I, D]) Seek(key I) {
-	keyBytes, err := it.idCodec.Encode(key)
-	if err != nil {
-		panic(err)
-	}
+// func (it *Iterator[I, D]) Seek(key I) {
+// 	keyBytes, err := it.idCodec.Encode(key)
+// 	if err != nil {
+// 		panic(err)
+// 	}
 
-	it.base.Seek(keyBytes)
+// 	it.base.Seek(keyBytes)
+// }
+
+// Seek seeks the key.
+func (it *Iterator[I, D]) Seek(key []byte) {
+	it.base.Seek(key)
 }
 
 // Valid returns if the iterator is valid.
@@ -72,14 +77,19 @@ func (it *Iterator[I, D]) Valid() bool {
 }
 
 // Key returns the current key.
-func (it *Iterator[I, D]) Key() I {
-	keyBytes := it.base.Key()
-	key, err := it.idCodec.Decode(keyBytes)
-	if err != nil {
-		panic(err)
-	}
+// func (it *Iterator[I, D]) Key() I {
+// 	keyBytes := it.base.Key()
+// 	key, err := it.idCodec.Decode(keyBytes)
+// 	if err != nil {
+// 		panic(err)
+// 	}
 
-	return key
+// 	return key
+// }
+
+// Key returns the current key.
+func (it *Iterator[I, D]) Key() []byte {
+	return it.base.Key()
 }
 
 // Value returns the current value.
@@ -88,7 +98,11 @@ func (it *Iterator[I, D]) Value() (*Object[I, D], error) {
 	if err != nil {
 		return nil, err
 	}
-	id := it.Key()
+	k := it.Key()
+	id, err := it.idCodec.Decode(k)
+	if err != nil {
+		return nil, err
+	}
 	obj := &Object[I, D]{
 		ID:   &id,
 		Data: *data,
