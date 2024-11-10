@@ -3,6 +3,7 @@ package schema
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -90,4 +91,65 @@ func unwrapPtr[T reflectPtr[T]](v T) T {
 	}
 
 	return v
+}
+
+// ExtractPathFromAny extracts the value from the given any value with the given path.
+func ExtractPathFromAny(v any, path string) (any, error) {
+	parts := strings.SplitN(path, ".", 2)
+
+	if len(parts) == 0 {
+		return v, nil
+	}
+	if len(parts) > 1 && parts[0] == "" {
+		return ExtractPathFromAny(v, parts[1])
+	}
+	if v == nil {
+		return nil, fmt.Errorf("cannot extract path %q from nil", path)
+	}
+
+	switch vv := v.(type) {
+	case map[string]any:
+		var ok bool
+		v, ok = vv[parts[0]]
+		if !ok {
+			return nil, fmt.Errorf("key %q not found", parts[0])
+		}
+	case []any:
+		if parts[0] == "*" {
+			result := make([]any, 0, len(vv))
+			for _, iv := range vv {
+				if len(parts) > 1 {
+					var err error
+					iv, err = ExtractPathFromAny(iv, parts[1])
+					if err != nil {
+						return nil, err
+					}
+				}
+				switch iv := iv.(type) {
+				case []any:
+					result = append(result, iv...)
+				default:
+					result = append(result, iv)
+				}
+			}
+			return result, nil
+		} else {
+			i, err := strconv.Atoi(parts[0])
+			if err != nil {
+				return nil, fmt.Errorf("invalid index %q: %w", parts[0], err)
+			}
+			if i < 0 || i >= len(vv) {
+				return nil, fmt.Errorf("index %d out of range", i)
+			}
+			v = vv[i]
+		}
+	default:
+		return nil, fmt.Errorf("cannot extract path %q from %T", path, v)
+	}
+
+	if len(parts) == 1 {
+		return v, nil
+	}
+
+	return ExtractPathFromAny(v, parts[1])
 }

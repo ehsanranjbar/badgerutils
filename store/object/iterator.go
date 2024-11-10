@@ -105,7 +105,7 @@ func (it *Iterator[I, D]) Value() (*Object[I, D], error) {
 		return nil, err
 	}
 	obj := &Object[I, D]{
-		ID:   &id,
+		Id:   &id,
 		Data: *data,
 	}
 

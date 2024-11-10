@@ -3,16 +3,15 @@ package object
 import (
 	"encoding"
 	"fmt"
-	"time"
 
 	"github.com/araddon/qlbridge/expr"
-	qlvalue "github.com/araddon/qlbridge/value"
 	qlvm "github.com/araddon/qlbridge/vm"
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/codec"
 	"github.com/ehsanranjbar/badgerutils/extutil"
 	"github.com/ehsanranjbar/badgerutils/indexing"
+	"github.com/ehsanranjbar/badgerutils/internal/qlutil"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	"github.com/ehsanranjbar/badgerutils/schema"
 	extstore "github.com/ehsanranjbar/badgerutils/store/ext"
@@ -24,7 +23,7 @@ type Object[
 	I any,
 	D encoding.BinaryMarshaler,
 ] struct {
-	ID       *I             `json:"id,omitempty"`
+	Id       *I             `json:"id,omitempty"`
 	Data     D              `json:"data,omitempty"`
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
@@ -64,7 +63,7 @@ func New[
 	if s.idCodec == nil {
 		s.idCodec = codec.CodecFor[I]()
 		if s.idCodec == nil {
-			panic("no codec for ID")
+			panic("no codec for id")
 		}
 	}
 
@@ -92,8 +91,8 @@ func New[
 	return s, nil
 }
 
-// WithIDFunc is an option to set the ID function.
-func WithIDFunc[
+// WithIdFunc is an option to set the id function.
+func WithIdFunc[
 	I any,
 	D encoding.BinaryMarshaler,
 	PD sstore.PointerBinaryUnmarshaler[D],
@@ -105,8 +104,8 @@ func WithIDFunc[
 	}
 }
 
-// WithIDCodec is an option to set the ID codec.
-func WithIDCodec[
+// WithIdCodec is an option to set the id codec.
+func WithIdCodec[
 	I any,
 	D encoding.BinaryMarshaler,
 	PD sstore.PointerBinaryUnmarshaler[D],
@@ -211,7 +210,7 @@ func (s *Store[I, D, PD]) GetObject(id I) (*Object[I, D], error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get object's data: %w", err)
 	}
-	obj := &Object[I, D]{ID: &id, Data: *d}
+	obj := &Object[I, D]{Id: &id, Data: *d}
 	meta, err := s.metaStore.Get(key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get object's metadata: %w", err)
@@ -235,23 +234,23 @@ func (s *Store[I, D, PD]) Set(d D, opts ...func(*Object[I, D])) error {
 		opt(obj)
 	}
 
-	if obj.ID == nil {
+	if obj.Id == nil {
 		if s.idFunc == nil {
-			return fmt.Errorf("no ID function with nil ID")
+			return fmt.Errorf("no id function with nil id")
 		}
 
 		id, err := s.idFunc(&d)
 		if err != nil {
 			return err
 		}
-		obj.ID = &id
+		obj.Id = &id
 	}
 
 	return s.SetObject(obj)
 }
 
-// WithID is an option to set the ID of the object.
-func WithID[
+// WithId is an option to set the id of the object.
+func WithId[
 	I any,
 	D encoding.BinaryMarshaler,
 	PD sstore.PointerBinaryUnmarshaler[D],
@@ -259,7 +258,7 @@ func WithID[
 	id I,
 ) func(*Object[I, D]) {
 	return func(o *Object[I, D]) {
-		o.ID = &id
+		o.Id = &id
 	}
 }
 
@@ -278,11 +277,11 @@ func WithMetadata[
 
 // SetObject sets the object to the store.
 func (s *Store[I, D, PD]) SetObject(obj *Object[I, D]) error {
-	if obj.ID == nil {
-		return fmt.Errorf("no ID with nil ID")
+	if obj.Id == nil {
+		return fmt.Errorf("nil id is not allowed")
 	}
 
-	key, err := s.idCodec.Encode(*obj.ID)
+	key, err := s.idCodec.Encode(*obj.Id)
 	if err != nil {
 		return err
 	}
@@ -324,40 +323,12 @@ func (s *Store[I, D, PD]) Query(q string) (badgerutils.Iterator[*Object[I, D]], 
 		return nil, err
 	}
 
-	return iters.Filter(s.NewIterator(badger.DefaultIteratorOptions), func(o *Object[I, D], _ *badger.Item) bool {
-		ctx := &qlObjectContextReader[I, D]{
-			id:        o.ID,
-			d:         o.Data,
-			extractor: s.extractor,
-		}
-		t, _ := qlvm.MatchesExpr(ctx, qe)
-		return t
-	}), nil
+	iter := iters.Filter(
+		s.NewIterator(badger.DefaultIteratorOptions),
+		func(obj *Object[I, D], item *badger.Item) bool {
+			ctx := qlutil.NewObjectContextWrapper[I, D](obj.Id, obj.Data, obj.Metadata, s.extractor, nil)
+			t, _ := qlvm.MatchesExpr(ctx, qe)
+			return t
+		})
+	return iter, nil
 }
-
-type qlObjectContextReader[I, D any] struct {
-	id        *I
-	d         D
-	extractor schema.PathExtractor[D]
-}
-
-// Get implements the qlbridge.ContextReader interface.
-func (r *qlObjectContextReader[I, D]) Get(key string) (qlvalue.Value, bool) {
-	if key == "id" {
-		return qlvalue.NewValue(r.id), true
-	}
-
-	v, err := r.extractor.ExtractPath(r.d, key)
-	if err != nil {
-		return qlvalue.NewErrorValue(err), true
-	}
-	return qlvalue.NewValue(v), true
-}
-
-// Row implements the qlbridge.ContextReader interface.
-// I don't know what this is supposed to do.
-func (r *qlObjectContextReader[I, D]) Row() map[string]qlvalue.Value { return nil }
-
-// Ts implements the qlbridge.ContextReader interface.
-// I don't know what this is supposed to do.
-func (r *qlObjectContextReader[I, D]) Ts() time.Time { return time.Time{} }

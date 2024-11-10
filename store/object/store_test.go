@@ -28,7 +28,7 @@ func TestStore(t *testing.T) {
 	var i int64 = 0
 	store, err = objstore.New(
 		txn,
-		objstore.WithIDFunc(func(d *testutil.TestStruct) (int64, error) {
+		objstore.WithIdFunc(func(d *testutil.TestStruct) (int64, error) {
 			i++
 			return i, nil
 		}),
@@ -62,7 +62,7 @@ func TestStore(t *testing.T) {
 		err := store.Set(value1)
 		require.NoError(t, err)
 
-		err = store.Set(value2, objstore.WithID[int64, testutil.TestStruct](key2), objstore.WithMetadata[int64, testutil.TestStruct](extutil.Metadata{"key": "value"}))
+		err = store.Set(value2, objstore.WithId[int64, testutil.TestStruct](key2), objstore.WithMetadata[int64, testutil.TestStruct](extutil.Metadata{"key": "value"}))
 		require.NoError(t, err)
 	})
 
@@ -79,12 +79,12 @@ func TestStore(t *testing.T) {
 	t.Run("GetObject", func(t *testing.T) {
 		obj, err := store.GetObject(key1)
 		require.NoError(t, err)
-		require.Equal(t, key1, *obj.ID)
+		require.Equal(t, key1, *obj.Id)
 		require.Equal(t, value1, obj.Data)
 
 		obj, err = store.GetObject(key2)
 		require.NoError(t, err)
-		require.Equal(t, key2, *obj.ID)
+		require.Equal(t, key2, *obj.Id)
 		require.Equal(t, value2, obj.Data)
 		require.Contains(t, obj.Metadata, "key")
 	})
