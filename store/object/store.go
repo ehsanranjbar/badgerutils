@@ -14,6 +14,7 @@ import (
 	"github.com/ehsanranjbar/badgerutils/extutil"
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/iters"
+	"github.com/ehsanranjbar/badgerutils/schema"
 	extstore "github.com/ehsanranjbar/badgerutils/store/ext"
 	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
 )
@@ -39,8 +40,8 @@ type Store[
 	idCodec       codec.Codec[I]
 	metaStore     *extutil.AssociateStore[D, extutil.Metadata, *extutil.Metadata]
 	indexers      map[string]*indexing.Extension[D]
-	extractor     codec.PathExtractor[D, any]
-	flatExtractor codec.PathExtractor[[]byte, any]
+	extractor     schema.PathExtractor[D]
+	flatExtractor schema.PathExtractor[[]byte]
 }
 
 // New creates a new Store.
@@ -85,7 +86,7 @@ func New[
 	}
 
 	if s.extractor == nil {
-		s.extractor = codec.NewConvertPathExtractor(codec.NewReflectPathExtractor[D](), codec.ReflectValueToAny)
+		s.extractor = schema.NewReflectPathExtractor[D](true)
 	}
 
 	return s, nil
@@ -154,7 +155,7 @@ func WithExtractor[
 	D encoding.BinaryMarshaler,
 	PD sstore.PointerBinaryUnmarshaler[D],
 ](
-	e codec.PathExtractor[D, any],
+	e schema.PathExtractor[D],
 ) func(*Store[I, D, PD]) {
 	return func(s *Store[I, D, PD]) {
 		s.extractor = e
@@ -167,7 +168,7 @@ func WithFlatExtractor[
 	D encoding.BinaryMarshaler,
 	PD sstore.PointerBinaryUnmarshaler[D],
 ](
-	e codec.PathExtractor[[]byte, any],
+	e schema.PathExtractor[[]byte],
 ) func(*Store[I, D, PD]) {
 	return func(s *Store[I, D, PD]) {
 		s.flatExtractor = e
@@ -337,7 +338,7 @@ func (s *Store[I, D, PD]) Query(q string) (badgerutils.Iterator[*Object[I, D]], 
 type qlObjectContextReader[I, D any] struct {
 	id        *I
 	d         D
-	extractor codec.PathExtractor[D, any]
+	extractor schema.PathExtractor[D]
 }
 
 // Get implements the qlbridge.ContextReader interface.

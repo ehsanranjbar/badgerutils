@@ -1,4 +1,4 @@
-package codec
+package schema
 
 import (
 	"fmt"
@@ -6,33 +6,40 @@ import (
 	"strings"
 )
 
+// PathExtractor is an interface for extracting a value with the given path from a given value.
+type PathExtractor[T any] interface {
+	ExtractPath(t T, path string) (any, error)
+}
+
 // ReflectPathExtractor is a PathExtractor that uses reflection to extract the value.
 type ReflectPathExtractor[T any] struct {
-	rt    reflect.Type
-	cache map[string][]int
+	rt        reflect.Type
+	returnAny bool
+	cache     map[string][]int
 }
 
 // NewReflectPathExtractor creates a new ReflectPathExtractor for the given type.
-func NewReflectPathExtractor[T any]() ReflectPathExtractor[T] {
+func NewReflectPathExtractor[T any](returnAny bool) ReflectPathExtractor[T] {
 	rt := reflect.TypeFor[T]()
 	if rt.Kind() != reflect.Struct {
 		panic(fmt.Sprintf("reflect path extractor only supports struct types but got %s", rt))
 	}
 
 	return ReflectPathExtractor[T]{
-		rt:    rt,
-		cache: make(map[string][]int),
+		rt:        rt,
+		returnAny: returnAny,
+		cache:     make(map[string][]int),
 	}
 }
 
 // ExtractPath implements the PathExtractor interface.
-func (pe ReflectPathExtractor[T]) ExtractPath(v T, path string) (reflect.Value, error) {
+func (pe ReflectPathExtractor[T]) ExtractPath(v T, path string) (any, error) {
 	indices, ok := pe.cache[path]
 	if !ok {
 		var err error
 		pe.cache[path], err = pe.verifyPath(path)
 		if err != nil {
-			return reflect.Value{}, err
+			return nil, err
 		}
 		indices = pe.cache[path]
 	}
@@ -42,14 +49,18 @@ func (pe ReflectPathExtractor[T]) ExtractPath(v T, path string) (reflect.Value, 
 		var err error
 		rv = unwrapPtr(rv).Field(i)
 		if !rv.IsValid() {
-			return reflect.Value{}, fmt.Errorf("invalid field %d: %w", i, err)
+			return nil, fmt.Errorf("invalid field %d: %w", i, err)
 		}
 		if rv.Kind() == reflect.Ptr && rv.IsNil() {
 			return rv, nil
 		}
 	}
 
-	return rv, nil
+	if pe.returnAny {
+		return rv.Interface(), nil
+	} else {
+		return rv, nil
+	}
 }
 
 func (pe ReflectPathExtractor[T]) verifyPath(path string) ([]int, error) {
@@ -79,13 +90,4 @@ func unwrapPtr[T reflectPtr[T]](v T) T {
 	}
 
 	return v
-}
-
-// ReflectValueToAny converts the given reflect.Value to any.
-func ReflectValueToAny(v reflect.Value) (any, error) {
-	if !v.IsValid() {
-		return nil, nil
-	}
-
-	return v.Interface(), nil
 }

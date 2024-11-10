@@ -5,6 +5,26 @@ import (
 	"math"
 )
 
+// EncodeInt8 returns the byte slice representation of the given int8 which is encoded in lexicographical order.
+func EncodeInt8(v int8) []byte {
+	return []byte{uint8(v) ^ (1 << 7)}
+}
+
+// DecodeInt8 returns the int8 representation of the given byte slice which is decoded from lexicographical order.
+func DecodeInt8(b []byte) int8 {
+	return int8(b[0] ^ (1 << 7))
+}
+
+// EncodeInt16 returns the byte slice representation of the given int16 which is encoded in lexicographical order.
+func EncodeInt16(v int16) []byte {
+	return EncodeUint16(uint16(v) ^ (1 << 15))
+}
+
+// EncodeUint16 returns the byte slice representation of the given uint16.
+func EncodeUint16(v uint16) []byte {
+	return binary.BigEndian.AppendUint16(nil, v)
+}
+
 // EncodeInt32 returns the byte slice representation of the given int32 which is encoded in lexicographical order.
 func EncodeInt32(v int32) []byte {
 	return EncodeUint32(uint32(v) ^ (1 << 31))

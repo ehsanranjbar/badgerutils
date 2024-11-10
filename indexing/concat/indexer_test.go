@@ -5,13 +5,13 @@ import (
 	"testing"
 
 	"github.com/ehsanranjbar/badgerutils"
-	"github.com/ehsanranjbar/badgerutils/codec"
 	"github.com/ehsanranjbar/badgerutils/codec/be"
 	"github.com/ehsanranjbar/badgerutils/codec/lex"
 	"github.com/ehsanranjbar/badgerutils/expr"
 	"github.com/ehsanranjbar/badgerutils/indexing"
 	"github.com/ehsanranjbar/badgerutils/indexing/concat"
 	"github.com/ehsanranjbar/badgerutils/iters"
+	"github.com/ehsanranjbar/badgerutils/schema"
 	"github.com/stretchr/testify/require"
 )
 
@@ -141,11 +141,12 @@ func TestIndexer_Index(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lxf := lex.SimpleLexifier{}
-			indexer, err := concat.New[Foo](
-				codec.NewConvertPathExtractor(codec.NewReflectPathExtractor[Foo](), lxf.LexifyRVMulti),
+			indexer, err := concat.New(
+				schema.NewReflectPathExtractor[Foo](false),
+				&lex.Encoder{},
 				tt.components...,
 			)
+			require.NoError(t, err)
 
 			got, err := indexer.Index(tt.input, true)
 			if tt.wantErr {
@@ -160,8 +161,6 @@ func TestIndexer_Index(t *testing.T) {
 }
 
 func TestIndexer_Lookup(t *testing.T) {
-	lxf := lex.SimpleLexifier{}
-
 	tests := []struct {
 		name       string
 		components []concat.Component
@@ -172,7 +171,7 @@ func TestIndexer_Lookup(t *testing.T) {
 		{
 			name:       "Single component equal",
 			components: []concat.Component{concat.NewComponent("Str1")},
-			args:       []any{expr.NewNamed("Str1", expr.NewEqual(lxf.MustLexifyAny("Alice")))},
+			args:       []any{expr.NewAssigned("Str1", expr.NewExact[any]("Alice"))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
 					expr.NewBound(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), false),
@@ -184,8 +183,8 @@ func TestIndexer_Lookup(t *testing.T) {
 			name:       "Multiple components equal",
 			components: []concat.Component{concat.NewComponent("Str2"), concat.NewComponent("Int").WithSize(8)},
 			args: []any{
-				expr.NewNamed("Str2", expr.NewEqual(lxf.MustLexifyAny("Male"))),
-				expr.NewNamed("Int", expr.NewEqual(lxf.MustLexifyAny(int(30)))),
+				expr.NewAssigned("Str2", expr.NewExact[any]("Male")),
+				expr.NewAssigned("Int", expr.NewExact[any](int(30))),
 			},
 			want: []indexing.Partition{
 				indexing.NewPartition(
@@ -197,11 +196,11 @@ func TestIndexer_Lookup(t *testing.T) {
 		{
 			name:       "Range",
 			components: []concat.Component{concat.NewComponent("Int").WithSize(8)},
-			args: []any{expr.NewNamed(
+			args: []any{expr.NewAssigned(
 				"Int",
 				expr.NewRange(
-					expr.NewBound(lxf.MustLexifyAny(int(0)), false),
-					expr.NewBound(lxf.MustLexifyAny(int(30)), false),
+					expr.NewBound[any](int(0), false),
+					expr.NewBound[any](int(30), false),
 				),
 			)},
 			want: []indexing.Partition{
@@ -214,11 +213,7 @@ func TestIndexer_Lookup(t *testing.T) {
 		{
 			name:       "In",
 			components: []concat.Component{concat.NewComponent("Int").WithSize(8)},
-			args: []any{expr.NewNamed("Int", expr.NewIn(
-				lxf.MustLexifyAny(int(10)),
-				lxf.MustLexifyAny(int(20)),
-				lxf.MustLexifyAny(int(30)),
-			))},
+			args:       []any{expr.NewAssigned("Int", expr.NewSet[any](int(10), int(20), int(30)))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
 					expr.NewBound(lex.EncodeInt64(10), false),
@@ -237,7 +232,7 @@ func TestIndexer_Lookup(t *testing.T) {
 		{
 			name:       "Omitted component",
 			components: []concat.Component{concat.NewComponent("Str1"), concat.NewComponent("Str2")},
-			args:       []any{expr.NewNamed("Str1", expr.NewEqual(lxf.MustLexifyAny("Alice")))},
+			args:       []any{expr.NewAssigned("Str1", expr.NewExact[any]("Alice"))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
 					expr.NewBound(append(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), make([]byte, concat.DefaultMaxComponentSize)...), false),
@@ -248,7 +243,7 @@ func TestIndexer_Lookup(t *testing.T) {
 		{
 			name:       "Nested struct equal",
 			components: []concat.Component{concat.NewComponent("Struct.Test").WithSize(8)},
-			args:       []any{expr.NewNamed("Struct.Test", expr.NewEqual(lxf.MustLexifyAny(int64(42))))},
+			args:       []any{expr.NewAssigned("Struct.Test", expr.NewExact[any](int64(42)))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
 					expr.NewBound(lex.EncodeInt64(42), false),
@@ -259,7 +254,7 @@ func TestIndexer_Lookup(t *testing.T) {
 		{
 			name:       "Pointer to struct equal",
 			components: []concat.Component{concat.NewComponent("Pointer.Test").WithSize(8)},
-			args:       []any{expr.NewNamed("Pointer.Test", expr.NewEqual(lxf.MustLexifyAny(int64(42))))},
+			args:       []any{expr.NewAssigned("Pointer.Test", expr.NewExact[any](int64(42)))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
 					expr.NewBound(lex.EncodeInt64(42), false),
@@ -270,7 +265,7 @@ func TestIndexer_Lookup(t *testing.T) {
 		{
 			name:       "Descending order equal",
 			components: []concat.Component{concat.NewComponent("Int").WithSize(8).Desc()},
-			args:       []any{expr.NewNamed("Int", expr.NewEqual(lxf.MustLexifyAny(int64(30))))},
+			args:       []any{expr.NewAssigned("Int", expr.NewExact[any](int64(30)))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
 					expr.NewBound(lex.Invert(lex.EncodeInt64(30)), false),
@@ -281,7 +276,7 @@ func TestIndexer_Lookup(t *testing.T) {
 		{
 			name:       "Slice equal",
 			components: []concat.Component{concat.NewComponent("StrSlice")},
-			args:       []any{expr.NewNamed("StrSlice", expr.NewEqual(lxf.MustLexifyAny("Alice")))},
+			args:       []any{expr.NewAssigned("StrSlice", expr.NewExact[any]("Alice"))},
 			want: []indexing.Partition{
 				indexing.NewPartition(
 					expr.NewBound(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), false),
@@ -292,22 +287,22 @@ func TestIndexer_Lookup(t *testing.T) {
 		{
 			name:       "Non-existing field",
 			components: []concat.Component{concat.NewComponent("Str1")},
-			args:       []any{expr.NewNamed("NonExisting", expr.NewEqual(lxf.MustLexifyAny("Value")))},
+			args:       []any{expr.NewAssigned("NonExisting", expr.NewExact[any]("Value"))},
 			wantErr:    true,
 		},
 		{
 			name:       "Too many arguments",
 			components: []concat.Component{concat.NewComponent("Str1")},
 			args: []any{
-				expr.NewNamed("Str1", expr.NewEqual(lxf.MustLexifyAny("Alice"))),
-				expr.NewNamed("Str2", expr.NewEqual(lxf.MustLexifyAny("Bob"))),
+				expr.NewAssigned("Str1", expr.NewExact[any]("Alice")),
+				expr.NewAssigned("Str2", expr.NewExact[any]("Bob")),
 			},
 			wantErr: true,
 		},
 		{
 			name:       "Duplicate path",
 			components: []concat.Component{concat.NewComponent("Str1"), concat.NewComponent("Str2")},
-			args:       []any{expr.NewNamed("Str1", expr.NewEqual(lxf.MustLexifyAny("Alice"))), expr.NewNamed("Str1", expr.NewEqual(lxf.MustLexifyAny("Bob")))},
+			args:       []any{expr.NewAssigned("Str1", expr.NewExact[any]("Alice")), expr.NewAssigned("Str1", expr.NewExact[any]("Bob"))},
 			wantErr:    true,
 		},
 		{
@@ -321,7 +316,8 @@ func TestIndexer_Lookup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			indexer, err := concat.New[Foo](
-				codec.NewConvertPathExtractor(codec.NewReflectPathExtractor[Foo](), lxf.LexifyRVMulti),
+				schema.NewReflectPathExtractor[Foo](false),
+				&lex.Encoder{},
 				tt.components...,
 			)
 			require.NoError(t, err)

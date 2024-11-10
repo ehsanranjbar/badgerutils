@@ -1,9 +1,5 @@
 package concat
 
-import (
-	"github.com/ehsanranjbar/badgerutils/codec/lex"
-)
-
 const (
 	// DefaultMaxComponentSize is the default size that the binary representation of a component will be padded or truncated to.
 	DefaultMaxComponentSize = 256
@@ -11,9 +7,10 @@ const (
 
 // Component represents a component of concatenated keys in index
 type Component struct {
-	path       string
-	descending bool
-	size       int
+	path        string
+	includeType bool
+	size        int
+	descending  bool
 }
 
 // NewComponent creates a new component with the given path.
@@ -21,9 +18,9 @@ func NewComponent(path string) Component {
 	return Component{path: path, size: DefaultMaxComponentSize}
 }
 
-// Desc sets the descending flag of the component.
-func (comp Component) Desc() Component {
-	comp.descending = true
+// IncludeType sets the includeType flag of the component.
+func (comp Component) IncludeType() Component {
+	comp.includeType = true
 	return comp
 }
 
@@ -37,16 +34,8 @@ func (comp Component) WithSize(size int) Component {
 	return comp
 }
 
-func (comp Component) postProcess(v lex.Value) []byte {
-	if comp.descending {
-		v = v.Invert()
-	}
-
-	v = v.Resize(comp.size)
-
-	bz, err := v.MarshalBinary()
-	if err != nil {
-		panic(err)
-	}
-	return bz
+// Desc sets the descending flag of the component.
+func (comp Component) Desc() Component {
+	comp.descending = true
+	return comp
 }

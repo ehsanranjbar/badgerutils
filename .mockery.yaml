@@ -8,9 +8,9 @@ packages:
     interfaces:
       Indexer:
       ValueRetriever:
-  github.com/ehsanranjbar/badgerutils/codec:
+  github.com/ehsanranjbar/badgerutils/schema:
     interfaces:
       PathExtractor:
-  github.com/ehsanranjbar/badgerutils/store/extensible:
+  github.com/ehsanranjbar/badgerutils/store/ext:
     interfaces:
       Extension:

@@ -3,28 +3,34 @@ package concat
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/codec"
+	"github.com/ehsanranjbar/badgerutils/codec/be"
 	"github.com/ehsanranjbar/badgerutils/codec/lex"
 	"github.com/ehsanranjbar/badgerutils/expr"
 	"github.com/ehsanranjbar/badgerutils/iters"
+	"github.com/ehsanranjbar/badgerutils/schema"
 )
 
 // Indexer is an indexer for a struct type that generates keys base on struct fields for a btree index.
 type Indexer[T any] struct {
+	extractor  schema.PathExtractor[T]
+	encoder    codec.Encoder[any]
 	components []Component
-	extractor  codec.PathExtractor[T, []lex.Value]
 }
 
 // New creates a new indexer for the given struct type and components.
 func New[T any](
-	extractor codec.PathExtractor[T, []lex.Value],
+	extractor schema.PathExtractor[T],
+	encoder codec.Encoder[any],
 	comps ...Component,
 ) (*Indexer[T], error) {
 	return &Indexer[T]{
-		components: comps,
+		encoder:    encoder,
 		extractor:  extractor,
+		components: comps,
 	}, nil
 }
 
@@ -49,14 +55,14 @@ func (si *Indexer[T]) Index(v *T, set bool) ([]badgerutils.RawKVPair, error) {
 func (si *Indexer[T]) composeKeys(v T) ([][]byte, error) {
 	var keys [][]byte
 	for _, comp := range si.components {
-		values, err := si.extractor.ExtractPath(v, comp.path)
+		ev, err := si.extractor.ExtractPath(v, comp.path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to extract path %s: %w", comp.path, err)
 		}
 
-		suffixes := make([][]byte, len(values))
-		for i := 0; i < len(values); i++ {
-			suffixes[i] = comp.postProcess(values[i])
+		suffixes, err := si.encode(ev, comp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode value for %s: %w", comp.path, err)
 		}
 
 		if len(keys) == 0 {
@@ -73,6 +79,57 @@ func (si *Indexer[T]) composeKeys(v T) ([][]byte, error) {
 	}
 
 	return keys, nil
+}
+
+func (si *Indexer[T]) encode(v any, comp Component) ([][]byte, error) {
+	rv, ok := v.(reflect.Value)
+	if !ok {
+		rv = reflect.ValueOf(v)
+	}
+
+	if (rv.Kind() == reflect.Array || rv.Kind() == reflect.Slice) && rv.Type().Elem().Kind() != reflect.Uint8 {
+		return si.encodeArrayRV(comp, rv)
+	}
+
+	bz, err := si.encodeSingleRV(comp, rv)
+	if err != nil {
+		return nil, err
+	}
+	return [][]byte{bz}, nil
+}
+
+func (si *Indexer[T]) encodeArrayRV(comp Component, rv reflect.Value) ([][]byte, error) {
+	var keys [][]byte
+	for i := 0; i < rv.Len(); i++ {
+		k, err := si.encodeSingleRV(comp, rv.Index(i))
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, nil
+}
+
+func (si *Indexer[T]) encodeSingleRV(comp Component, rv reflect.Value) ([]byte, error) {
+	bz, err := si.encoder.Encode(rv.Interface())
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode value: %w", err)
+	}
+	bz = be.PadOrTruncRight(bz, comp.size)
+
+	if comp.descending {
+		bz = lex.Invert(bz)
+	}
+
+	if comp.includeType {
+		k := rv.Kind()
+		if k == reflect.Ptr && rv.IsNil() {
+			k = reflect.Invalid
+		}
+		bz = append([]byte{byte(k)}, bz...)
+	}
+
+	return bz, nil
 }
 
 func propagateKeys(keys [][]byte, suffixes [][]byte) [][]byte {
@@ -97,25 +154,33 @@ func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[expr.Range[[]byt
 	for _, comp := range si.components {
 		e, ok := exs[comp.path]
 		if !ok {
-			e = expr.NewRange[lex.Value](nil, nil)
+			e = expr.NewRange[any](nil, nil)
 		}
 
 		switch e := e.(type) {
-		case expr.Equal[lex.Value]:
-			v := comp.postProcess(e.Value())
+		case expr.Exact[any]:
+			rv := reflect.ValueOf(e.Value())
+			v, err := si.encodeSingleRV(comp, rv)
+			if err != nil {
+				return nil, fmt.Errorf("failed to encode value for %s: %w", comp.path, err)
+			}
 
 			pars = propagateRanges(pars, expr.NewRange(expr.NewBound(v, false), expr.NewBound(v, false)))
-		case expr.Range[lex.Value]:
+		case expr.Range[any]:
 			r, err := si.encodeRange(comp, e)
 			if err != nil {
 				return nil, fmt.Errorf("failed to encode range for %s: %w", comp.path, err)
 			}
 
 			pars = propagateRanges(pars, r)
-		case expr.In[lex.Value]:
+		case expr.Set[any]:
 			ranges := make([]expr.Range[[]byte], 0, len(e.Values()))
 			for _, v := range e.Values() {
-				bz := comp.postProcess(v)
+				rv := reflect.ValueOf(v)
+				bz, err := si.encodeSingleRV(comp, rv)
+				if err != nil {
+					return nil, fmt.Errorf("failed to encode value for %s: %w", comp.path, err)
+				}
 				ranges = append(ranges, expr.NewRange(expr.NewBound(bz, false), expr.NewBound(bz, false)))
 			}
 
@@ -128,7 +193,7 @@ func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[expr.Range[[]byt
 	return iters.Slice(pars), nil
 }
 
-func (si *Indexer[T]) encodeRange(comp Component, r expr.Range[lex.Value]) (expr.Range[[]byte], error) {
+func (si *Indexer[T]) encodeRange(comp Component, r expr.Range[any]) (expr.Range[[]byte], error) {
 	var low, high []byte
 	if r.Low().IsEmpty() {
 		if comp.descending {
@@ -137,7 +202,12 @@ func (si *Indexer[T]) encodeRange(comp Component, r expr.Range[lex.Value]) (expr
 			low = make([]byte, comp.size)
 		}
 	} else {
-		low = comp.postProcess(r.Low().Value())
+		var err error
+		rv := reflect.ValueOf(r.Low().Value())
+		low, err = si.encodeSingleRV(comp, rv)
+		if err != nil {
+			return expr.Range[[]byte]{}, fmt.Errorf("failed to encode low value: %w", err)
+		}
 	}
 
 	if r.High().IsEmpty() {
@@ -147,7 +217,12 @@ func (si *Indexer[T]) encodeRange(comp Component, r expr.Range[lex.Value]) (expr
 			high = bytes.Repeat([]byte{0xff}, comp.size)
 		}
 	} else {
-		high = comp.postProcess(r.High().Value())
+		var err error
+		rv := reflect.ValueOf(r.High().Value())
+		high, err = si.encodeSingleRV(comp, rv)
+		if err != nil {
+			return expr.Range[[]byte]{}, fmt.Errorf("failed to encode high value: %w", err)
+		}
 	}
 
 	return expr.NewRange(expr.NewBound(low, r.Low().Exclusive()), expr.NewBound(high, r.High().Exclusive())), nil
@@ -160,7 +235,7 @@ func (si *Indexer[T]) verifyExprs(args []any) (map[string]any, error) {
 
 	exs := make(map[string]any)
 	for _, arg := range args {
-		e, ok := arg.(expr.Named)
+		e, ok := arg.(expr.Assigned)
 		if !ok {
 			return nil, fmt.Errorf("unsupported argument type %T", arg)
 		}

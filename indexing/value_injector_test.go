@@ -60,7 +60,7 @@ func TestValueInjector_Index(t *testing.T) {
 					{Key: []byte("key2")},
 				}, nil).
 				Maybe()
-			pe := mocks.NewMockPathExtractor[struct{}, any](t)
+			pe := mocks.NewMockPathExtractor[struct{}](t)
 			pe.
 				EXPECT().
 				ExtractPath(mock.Anything, "A").

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ehsanranjbar/badgerutils"
-	"github.com/ehsanranjbar/badgerutils/codec"
+	"github.com/ehsanranjbar/badgerutils/schema"
 )
 
 // Indexer is a wrapper around an Indexer that injects custom values to the indexes.
@@ -68,27 +68,27 @@ type ValueRetriever[T any] interface {
 
 // MapValueRetriever is a value retriever that retrieves the given field paths of struct and encodes them to bytes.
 type MapValueRetriever[T any] struct {
-	extractor codec.PathExtractor[T, any]
-	encoder   func(any) ([]byte, error)
+	extractor schema.PathExtractor[T]
+	encodeFunc   func(any) ([]byte, error)
 	paths     []string
 }
 
 // NewMapValueRetriever creates a new map value retriever for the given struct type and field paths.
 func NewMapValueRetriever[T any](
-	extractor codec.PathExtractor[T, any],
-	encoder func(any) ([]byte, error),
+	extractor schema.PathExtractor[T],
+	encodeFunc func(any) ([]byte, error),
 	paths ...string,
 ) *MapValueRetriever[T] {
 	if extractor == nil {
 		panic("extractor is required")
 	}
-	if encoder == nil {
+	if encodeFunc == nil {
 		panic("encoder is required")
 	}
 
 	return &MapValueRetriever[T]{
 		extractor: extractor,
-		encoder:   encoder,
+		encodeFunc:   encodeFunc,
 		paths:     paths,
 	}
 }
@@ -105,7 +105,7 @@ func (r *MapValueRetriever[T]) RetrieveValue(v *T) ([]byte, error) {
 			m[path] = a
 		}
 	}
-	b, err := r.encoder(m)
+	b, err := r.encodeFunc(m)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode value: %v", err)
 	}
