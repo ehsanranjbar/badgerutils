@@ -10,6 +10,7 @@ import (
 // Indexer is a wrapper around an Indexer that injects custom values to the indexes.
 type ValueInjector[T any] struct {
 	indexer   Indexer[T]
+	describer IndexDescriptor
 	retriever ValueRetriever[T]
 }
 
@@ -21,12 +22,14 @@ func NewValueInjector[T any](
 	if indexer == nil {
 		panic("indexer is required")
 	}
+	desc, _ := indexer.(IndexDescriptor)
 	if retriever == nil {
 		panic("retriever is required")
 	}
 
 	return &ValueInjector[T]{
 		indexer:   indexer,
+		describer: desc,
 		retriever: retriever,
 	}
 }
@@ -61,16 +64,30 @@ func (i *ValueInjector[T]) Lookup(args ...any) (badgerutils.Iterator[Partition],
 	return i.indexer.Lookup(args...)
 }
 
+// SupportedQueries implements the IndexDescriber interface.
+func (i *ValueInjector[T]) SupportedQueries() []string {
+	if i.describer != nil {
+		return i.describer.SupportedQueries()
+	}
+	return nil
+}
+
+// SupportedValues implements the IndexDescriber interface.
+func (i *ValueInjector[T]) SupportedValues() []string {
+	return i.retriever.Paths()
+}
+
 // ValueRetriever is an interface that retrieves index custom values for index only scans from the indexed type.
 type ValueRetriever[T any] interface {
 	RetrieveValue(v *T) ([]byte, error)
+	Paths() []string
 }
 
 // MapValueRetriever is a value retriever that retrieves the given field paths of struct and encodes them to bytes.
 type MapValueRetriever[T any] struct {
-	extractor schema.PathExtractor[T]
-	encodeFunc   func(any) ([]byte, error)
-	paths     []string
+	extractor  schema.PathExtractor[T]
+	encodeFunc func(any) ([]byte, error)
+	paths      []string
 }
 
 // NewMapValueRetriever creates a new map value retriever for the given struct type and field paths.
@@ -87,9 +104,9 @@ func NewMapValueRetriever[T any](
 	}
 
 	return &MapValueRetriever[T]{
-		extractor: extractor,
-		encodeFunc:   encodeFunc,
-		paths:     paths,
+		extractor:  extractor,
+		encodeFunc: encodeFunc,
+		paths:      paths,
 	}
 }
 
@@ -110,4 +127,9 @@ func (r *MapValueRetriever[T]) RetrieveValue(v *T) ([]byte, error) {
 		return nil, fmt.Errorf("failed to encode value: %v", err)
 	}
 	return b, nil
+}
+
+// Paths implements the ValueRetriever interface.
+func (r *MapValueRetriever[T]) Paths() []string {
+	return r.paths
 }

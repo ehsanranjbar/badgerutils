@@ -2,6 +2,7 @@ package concat_test
 
 import (
 	"bytes"
+	"math"
 	"testing"
 
 	"github.com/ehsanranjbar/badgerutils"
@@ -19,6 +20,7 @@ type Foo struct {
 	Str1     string
 	Str2     string
 	Int      int
+	Float    float64
 	Struct   Bar
 	Pointer  *Bar
 	Bytes    []byte
@@ -211,6 +213,22 @@ func TestIndexer_Lookup(t *testing.T) {
 			},
 		},
 		{
+			name: "Range with open bound",
+			components: []concat.Component{
+				concat.NewComponent("Int").WithSize(8),
+				concat.NewComponent("Float").WithSize(8),
+			},
+			args: []any{
+				expr.NewAssigned("Int", expr.NewRange(expr.NewBound[any](5, true), nil)),
+			},
+			want: []indexing.Partition{
+				indexing.NewPartition(
+					expr.NewBound(append(lex.EncodeInt64(6), bytes.Repeat([]byte{0}, 8)...), false),
+					expr.NewBound(append(lex.EncodeInt64(math.MaxInt64), bytes.Repeat([]byte{0xff}, 8)...), false),
+				),
+			},
+		},
+		{
 			name:       "In",
 			components: []concat.Component{concat.NewComponent("Int").WithSize(8)},
 			args:       []any{expr.NewAssigned("Int", expr.NewSet[any](int(10), int(20), int(30)))},
@@ -315,7 +333,7 @@ func TestIndexer_Lookup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			indexer, err := concat.New[Foo](
+			indexer, err := concat.New(
 				schema.NewReflectPathExtractor[Foo](false),
 				&lex.Encoder{},
 				tt.components...,
@@ -332,6 +350,43 @@ func TestIndexer_Lookup(t *testing.T) {
 			gotPartitions, err := iters.Collect(got)
 			require.NoError(t, err)
 			require.Equal(t, tt.want, gotPartitions)
+		})
+	}
+}
+
+func TestIndexer_SupportedExprs(t *testing.T) {
+	tests := []struct {
+		name       string
+		components []concat.Component
+		want       []string
+	}{
+		{
+			name:       "Single component",
+			components: []concat.Component{concat.NewComponent("Str1")},
+			want:       []string{"queryable(Str1, '=,>,>=,<,<=')"},
+		},
+		{
+			name:       "Multiple components",
+			components: []concat.Component{concat.NewComponent("Str2"), concat.NewComponent("Int").WithSize(8)},
+			want: []string{
+				"queryable(Str2, '=,>,>=,<,<=')",
+				"queryable(Str2, '=') and queryable(Int, '=,>,>=,<,<=')",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			indexer, err := concat.New(
+				schema.NewReflectPathExtractor[Foo](false),
+				&lex.Encoder{},
+				tt.components...,
+			)
+			require.NoError(t, err)
+
+			for _, l := range indexer.SupportedQueries() {
+				require.Contains(t, tt.want, l)
+			}
 		})
 	}
 }

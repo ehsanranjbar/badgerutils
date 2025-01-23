@@ -3,7 +3,9 @@ package concat
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"reflect"
+	"strings"
 
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/codec"
@@ -19,6 +21,7 @@ type Indexer[T any] struct {
 	extractor  schema.PathExtractor[T]
 	encoder    codec.Encoder[any]
 	components []Component
+	queries    []string
 }
 
 // New creates a new indexer for the given struct type and components.
@@ -31,7 +34,26 @@ func New[T any](
 		encoder:    encoder,
 		extractor:  extractor,
 		components: comps,
+		queries:    calculateQueries(comps),
 	}, nil
+}
+
+func calculateQueries(comps []Component) []string {
+	lookups := make([]string, 0, len(comps))
+
+	lookups = append(lookups, fmt.Sprintf("queryable(%s, '=,>,>=,<,<=')", comps[0].path))
+
+	for i, comp := range comps[1:] {
+		parts := make([]string, 0, i+1)
+		for _, c := range comps[:i+1] {
+			parts = append(parts, fmt.Sprintf("queryable(%s, '=')", c.path))
+		}
+		parts = append(parts, fmt.Sprintf("queryable(%s, '=,>,>=,<,<=')", comp.path))
+
+		lookups = append(lookups, strings.Join(parts, " and "))
+	}
+
+	return lookups
 }
 
 // Index implements the Indexer interface.
@@ -111,7 +133,13 @@ func (si *Indexer[T]) encodeArrayRV(comp Component, rv reflect.Value) ([][]byte,
 }
 
 func (si *Indexer[T]) encodeSingleRV(comp Component, rv reflect.Value) ([]byte, error) {
-	bz, err := si.encoder.Encode(rv.Interface())
+	v := rv.Interface()
+
+	if comp.convertTo != nil {
+		v = convertRVToType(rv, comp.convertTo)
+	}
+
+	bz, err := si.encoder.Encode(v)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode value: %w", err)
 	}
@@ -121,7 +149,7 @@ func (si *Indexer[T]) encodeSingleRV(comp Component, rv reflect.Value) ([]byte, 
 		bz = lex.Invert(bz)
 	}
 
-	if comp.includeType {
+	if comp.typed {
 		k := rv.Kind()
 		if k == reflect.Ptr && rv.IsNil() {
 			k = reflect.Invalid
@@ -130,6 +158,18 @@ func (si *Indexer[T]) encodeSingleRV(comp Component, rv reflect.Value) ([]byte, 
 	}
 
 	return bz, nil
+}
+
+func convertRVToType(rv reflect.Value, t reflect.Type) any {
+	irv := reflect.Indirect(rv)
+	if !irv.Type().ConvertibleTo(t) {
+		if t == float64Type {
+			return math.NaN()
+		}
+		return reflect.Zero(t).Interface()
+	}
+
+	return irv.Convert(t).Interface()
 }
 
 func propagateKeys(keys [][]byte, suffixes [][]byte) [][]byte {
@@ -154,6 +194,7 @@ func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[expr.Range[[]byt
 	for _, comp := range si.components {
 		e, ok := exs[comp.path]
 		if !ok {
+			// TODO: Remove this as it doesn't help with concat index when prior components are missing!
 			e = expr.NewRange[any](nil, nil)
 		}
 
@@ -165,14 +206,14 @@ func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[expr.Range[[]byt
 				return nil, fmt.Errorf("failed to encode value for %s: %w", comp.path, err)
 			}
 
-			pars = propagateRanges(pars, expr.NewRange(expr.NewBound(v, false), expr.NewBound(v, false)))
+			pars = expandRanges(pars, expr.NewRange(expr.NewBound(v, false), expr.NewBound(v, false)))
 		case expr.Range[any]:
 			r, err := si.encodeRange(comp, e)
 			if err != nil {
 				return nil, fmt.Errorf("failed to encode range for %s: %w", comp.path, err)
 			}
 
-			pars = propagateRanges(pars, r)
+			pars = expandRanges(pars, r)
 		case expr.Set[any]:
 			ranges := make([]expr.Range[[]byte], 0, len(e.Values()))
 			for _, v := range e.Values() {
@@ -184,13 +225,37 @@ func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[expr.Range[[]byt
 				ranges = append(ranges, expr.NewRange(expr.NewBound(bz, false), expr.NewBound(bz, false)))
 			}
 
-			pars = propagateRanges(pars, ranges...)
+			pars = expandRanges(pars, ranges...)
 		default:
 			return nil, fmt.Errorf("unsupported expression type %T", e)
 		}
 	}
 
 	return iters.Slice(pars), nil
+}
+
+func (si *Indexer[T]) verifyExprs(args []any) (map[string]any, error) {
+	if len(args) > len(si.components) {
+		return nil, fmt.Errorf("too many arguments %d, expected %d", len(args), len(si.components))
+	}
+
+	exs := make(map[string]any)
+	for _, arg := range args {
+		e, ok := arg.(expr.Assigned)
+		if !ok {
+			return nil, fmt.Errorf("unsupported argument type %T", arg)
+		}
+
+		if si.findComponent(e.Name()) == nil {
+			return nil, fmt.Errorf("unsupported path %s", e.Name())
+		}
+
+		if old, ok := exs[e.Name()]; ok {
+			return nil, fmt.Errorf("duplicate path %s in %v and %v", e.Name(), old, e)
+		}
+		exs[e.Name()] = e.Expression()
+	}
+	return exs, nil
 }
 
 func (si *Indexer[T]) encodeRange(comp Component, r expr.Range[any]) (expr.Range[[]byte], error) {
@@ -228,30 +293,6 @@ func (si *Indexer[T]) encodeRange(comp Component, r expr.Range[any]) (expr.Range
 	return expr.NewRange(expr.NewBound(low, r.Low().Exclusive()), expr.NewBound(high, r.High().Exclusive())), nil
 }
 
-func (si *Indexer[T]) verifyExprs(args []any) (map[string]any, error) {
-	if len(args) > len(si.components) {
-		return nil, fmt.Errorf("too many arguments %d, expected %d", len(args), len(si.components))
-	}
-
-	exs := make(map[string]any)
-	for _, arg := range args {
-		e, ok := arg.(expr.Assigned)
-		if !ok {
-			return nil, fmt.Errorf("unsupported argument type %T", arg)
-		}
-
-		if si.findComponent(e.Name()) == nil {
-			return nil, fmt.Errorf("unsupported path %s", e.Name())
-		}
-
-		if old, ok := exs[e.Name()]; ok {
-			return nil, fmt.Errorf("duplicate path %s in %v and %v", e.Name(), old, e)
-		}
-		exs[e.Name()] = e.Expression()
-	}
-	return exs, nil
-}
-
 func (si *Indexer[T]) findComponent(path string) *Component {
 	for _, comp := range si.components {
 		if comp.path == path {
@@ -261,7 +302,7 @@ func (si *Indexer[T]) findComponent(path string) *Component {
 	return nil
 }
 
-func propagateRanges(pars []expr.Range[[]byte], elems ...expr.Range[[]byte]) []expr.Range[[]byte] {
+func expandRanges(pars []expr.Range[[]byte], elems ...expr.Range[[]byte]) []expr.Range[[]byte] {
 	if len(pars) == 0 {
 		return elems
 	}
@@ -276,14 +317,34 @@ func propagateRanges(pars []expr.Range[[]byte], elems ...expr.Range[[]byte]) []e
 }
 
 func appendRange(p1 expr.Range[[]byte], p2 expr.Range[[]byte]) expr.Range[[]byte] {
+	p1Low := p1.Low()
+	p1High := p1.High()
+	if p1.Low().Exclusive() && !p1Low.IsEmpty() {
+		p1Low = expr.NewBound(lex.Increment(p1Low.Value()), false)
+	}
+	if p1.High().Exclusive() && !p1High.IsEmpty() {
+		p1High = expr.NewBound(lex.Decrement(p1High.Value()), false)
+	}
+	p1 = expr.NewRange(p1Low, p1High)
+
 	return expr.NewRange(
 		expr.NewBound(
 			append(p1.Low().Value(), p2.Low().Value()...),
-			p1.Low().Exclusive() || p2.Low().Exclusive(),
+			p2.Low().Exclusive(),
 		),
 		expr.NewBound(
 			append(p1.High().Value(), p2.High().Value()...),
-			p1.High().Exclusive() || p2.High().Exclusive(),
+			p2.High().Exclusive(),
 		),
 	)
+}
+
+// SupportedQueries implements the Indexer interface.
+func (si *Indexer[T]) SupportedQueries() []string {
+	return si.queries
+}
+
+// SupportedValues implements the Indexer interface.
+func (si *Indexer[T]) SupportedValues() []string {
+	return nil
 }
