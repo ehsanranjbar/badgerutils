@@ -11,14 +11,17 @@ import (
 
 // Extension is an extension for extensible stores that indexes the data with a given indexer.
 type Extension[T any] struct {
-	store   badgerutils.BadgerStore
-	indexer Indexer[T]
+	store      badgerutils.BadgerStore
+	indexer    Indexer[T]
+	descriptor IndexDescriptor
 }
 
 // NewExtension creates a new Extension.
 func NewExtension[T any](indexer Indexer[T]) *Extension[T] {
+	descriptor, _ := indexer.(IndexDescriptor)
 	return &Extension[T]{
-		indexer: indexer,
+		indexer:    indexer,
+		descriptor: descriptor,
 	}
 }
 
@@ -159,4 +162,14 @@ func (e *Extension[T]) Lookup(opts badger.IteratorOptions, args ...any) (badgeru
 	}
 
 	return LookupPartitions(refstore.New(e.store), iter, opts), nil
+}
+
+// SupportedQueries returns the supported queries of the index.
+func (e *Extension[T]) SupportedQueries() []string {
+	return e.descriptor.SupportedQueries()
+}
+
+// SupportedValues returns the supported values of the index.
+func (e *Extension[T]) SupportedValues() []string {
+	return e.descriptor.SupportedValues()
 }
