@@ -17,6 +17,53 @@ func (_m *MockValueRetriever[T]) EXPECT() *MockValueRetriever_Expecter[T] {
 	return &MockValueRetriever_Expecter[T]{mock: &_m.Mock}
 }
 
+// Paths provides a mock function with given fields:
+func (_m *MockValueRetriever[T]) Paths() []string {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for Paths")
+	}
+
+	var r0 []string
+	if rf, ok := ret.Get(0).(func() []string); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+
+	return r0
+}
+
+// MockValueRetriever_Paths_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Paths'
+type MockValueRetriever_Paths_Call[T any] struct {
+	*mock.Call
+}
+
+// Paths is a helper method to define mock.On call
+func (_e *MockValueRetriever_Expecter[T]) Paths() *MockValueRetriever_Paths_Call[T] {
+	return &MockValueRetriever_Paths_Call[T]{Call: _e.mock.On("Paths")}
+}
+
+func (_c *MockValueRetriever_Paths_Call[T]) Run(run func()) *MockValueRetriever_Paths_Call[T] {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockValueRetriever_Paths_Call[T]) Return(_a0 []string) *MockValueRetriever_Paths_Call[T] {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockValueRetriever_Paths_Call[T]) RunAndReturn(run func() []string) *MockValueRetriever_Paths_Call[T] {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RetrieveValue provides a mock function with given fields: v
 func (_m *MockValueRetriever[T]) RetrieveValue(v *T) ([]byte, error) {
 	ret := _m.Called(v)

@@ -326,7 +326,7 @@ func (s *Store[I, D, PD]) Query(q string) (badgerutils.Iterator[*Object[I, D]], 
 	iter := iters.Filter(
 		s.NewIterator(badger.DefaultIteratorOptions),
 		func(obj *Object[I, D], item *badger.Item) bool {
-			ctx := qlutil.NewObjectContextWrapper[I, D](obj.Id, obj.Data, obj.Metadata, s.extractor, nil)
+			ctx := qlutil.NewObjectContextWrapper(obj.Id, obj.Data, obj.Metadata, s.extractor, nil)
 			t, _ := qlvm.MatchesExpr(ctx, qe)
 			return t
 		})

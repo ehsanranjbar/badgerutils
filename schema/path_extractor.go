@@ -97,7 +97,7 @@ func unwrapPtr[T reflectPtr[T]](v T) T {
 func ExtractPathFromAny(v any, path string) (any, error) {
 	parts := strings.SplitN(path, ".", 2)
 
-	if len(parts) == 0 {
+	if len(parts) == 0 || path == "" {
 		return v, nil
 	}
 	if len(parts) > 1 && parts[0] == "" {

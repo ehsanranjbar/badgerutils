@@ -17,25 +17,30 @@ type PointerBinaryUnmarshaler[T any] interface {
 
 // Store is a store that serializes all keys and values.
 type Store[T encoding.BinaryMarshaler, PT PointerBinaryUnmarshaler[T]] struct {
-	base badgerutils.BadgerStore
+	base   badgerutils.BadgerStore
+	prefix []byte
 }
 
 // New creates a new serialized store.
 func New[T encoding.BinaryMarshaler, PT PointerBinaryUnmarshaler[T]](base badgerutils.BadgerStore) *Store[T, PT] {
-	return &Store[T, PT]{base: base}
-}
-
-// Prefix returns the prefix of the store.
-func (s *Store[T, PT]) Prefix() []byte {
-	if pfx, ok := s.base.(prefixed); ok {
-		return pfx.Prefix()
+	var prefix []byte
+	if pfx, ok := base.(prefixed); ok {
+		prefix = pfx.Prefix()
 	}
 
-	return nil
+	return &Store[T, PT]{
+		base:   base,
+		prefix: prefix,
+	}
 }
 
 type prefixed interface {
 	Prefix() []byte
+}
+
+// Prefix returns the prefix of the store.
+func (s *Store[T, PT]) Prefix() []byte {
+	return s.prefix
 }
 
 // Delete deletes the key from the store.

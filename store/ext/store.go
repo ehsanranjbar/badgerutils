@@ -24,7 +24,7 @@ type Store[T encoding.BinaryMarshaler,
 	exts map[string]Extension[T]
 }
 
-// New creates a new ObjectStore.
+// New creates a new Store.
 func New[T encoding.BinaryMarshaler,
 	PT sstore.PointerBinaryUnmarshaler[T],
 ](
