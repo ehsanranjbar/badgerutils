@@ -3,7 +3,6 @@ package ref
 import (
 	"fmt"
 	"math"
-	"time"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
@@ -15,7 +14,6 @@ import (
 type RefEntry struct {
 	Prefix        []byte
 	OptionalValue []byte // Value stored as the value of index record that can be used in index only queries
-	TTL           time.Duration
 }
 
 // NewRefEntry creates a new RefEntry
@@ -28,12 +26,6 @@ func NewRefEntry(prefix []byte) RefEntry {
 // WithValue sets the value of the RefEntry
 func (e RefEntry) WithValue(value []byte) RefEntry {
 	e.OptionalValue = value
-	return e
-}
-
-// WithTTL sets the TTL of the RefEntry
-func (e RefEntry) WithTTL(ttl time.Duration) RefEntry {
-	e.TTL = ttl
 	return e
 }
 
@@ -113,9 +105,6 @@ func (s *Store) Set(key []byte, e RefEntry) error {
 	}
 
 	item := badger.NewEntry(append(e.Prefix, key...), e.OptionalValue).WithMeta(uint8(len(key)))
-	if e.TTL > 0 {
-		item = item.WithTTL(e.TTL)
-	}
 	return s.base.SetEntry(item)
 }
 

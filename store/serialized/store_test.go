@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/ehsanranjbar/badgerutils/store/serialized"
 	"github.com/ehsanranjbar/badgerutils/testutil"
@@ -22,14 +21,6 @@ func (t TestStruct) MarshalBinary() ([]byte, error) {
 
 func (t *TestStruct) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, t)
-}
-
-func (t TestStruct) TTL() time.Duration {
-	return time.Minute
-}
-
-func (t TestStruct) MetaByte() byte {
-	return 0xff
 }
 
 type FailStruct struct{}
@@ -73,9 +64,8 @@ func TestStore(t *testing.T) {
 	t.Run("GetWithItem", func(t *testing.T) {
 		item, actual, err := store.GetWithItem(key)
 		require.NoError(t, err)
+		require.NotNil(t, item)
 		require.Equal(t, value, actual)
-		require.NotZero(t, item.ExpiresAt())
-		require.Equal(t, byte(0xff), item.UserMeta())
 	})
 
 	t.Run("MarshalFail", func(t *testing.T) {

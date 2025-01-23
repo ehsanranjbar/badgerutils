@@ -1,12 +1,9 @@
 package indexing
 
 import (
-	"time"
-
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
 	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
-	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
 )
 
 // Extension is an extension for extensible stores that indexes the data with a given indexer.
@@ -72,17 +69,13 @@ func (e *Extension[T]) indexIter(iter badgerutils.Iterator[*T]) error {
 		if err != nil {
 			return err
 		}
-		var ttl time.Duration
-		if iter.Item().ExpiresAt() != 0 {
-			ttl = time.Duration(iter.Item().ExpiresAt()-uint64(time.Now().Unix())) * time.Second
-		}
 
 		kvs, err := e.indexer.Index(v, true)
 		if err != nil {
 			return err
 		}
 		for _, kv := range kvs {
-			err = store.Set(k, refstore.NewRefEntry(kv.Key).WithValue(kv.Value).WithTTL(ttl))
+			err = store.Set(k, refstore.NewRefEntry(kv.Key).WithValue(kv.Value))
 			if err != nil {
 				return err
 			}
@@ -136,11 +129,7 @@ func (e *Extension[T]) OnSet(key []byte, old, new *T, opts ...any) error {
 		return err
 	}
 	for _, kv := range kvs {
-		var ttl time.Duration
-		if ti, ok := any(new).(sstore.TemporaryItem); ok {
-			ttl = ti.TTL()
-		}
-		err := store.Set(key, refstore.NewRefEntry(kv.Key).WithValue(kv.Value).WithTTL(ttl))
+		err := store.Set(key, refstore.NewRefEntry(kv.Key).WithValue(kv.Value))
 		if err != nil {
 			return err
 		}

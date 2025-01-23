@@ -2,7 +2,6 @@ package serialized
 
 import (
 	"encoding"
-	"time"
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
@@ -77,19 +76,7 @@ func (s *Store[T, PT]) GetWithItem(key []byte) (item *badger.Item, value *T, err
 	return item, (*T)(v), err
 }
 
-// TemporaryItem is an item that has a TTL.
-type TemporaryItem interface {
-	TTL() time.Duration
-}
-
-// MetaBearer is an item that has meta byte.
-type MetaBearer interface {
-	MetaByte() byte
-}
-
 // Set marshals the value as binary and sets it to the key.
-// If the value implements TemporaryItem, it will set the TTL.
-// If the value implements MetaBearer, it will set the meta byte.
 func (s *Store[T, PT]) Set(key []byte, value *T) error {
 	var (
 		data []byte
@@ -103,13 +90,5 @@ func (s *Store[T, PT]) Set(key []byte, value *T) error {
 	}
 
 	entry := badger.NewEntry(key, data)
-	anyValue := any(value)
-	if ti, ok := anyValue.(TemporaryItem); ok {
-		entry = entry.WithTTL(ti.TTL())
-	}
-	if md, ok := anyValue.(MetaBearer); ok {
-		entry = entry.WithMeta(md.MetaByte())
-	}
-
 	return s.base.SetEntry(entry)
 }
