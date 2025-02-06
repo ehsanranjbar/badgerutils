@@ -11,9 +11,10 @@ import (
 )
 
 func TestRefStore(t *testing.T) {
-	txn := testutil.PrepareTxn(t, true)
+	store := ref.New(nil)
 
-	store := ref.New(txn)
+	txn := testutil.PrepareTxn(t, true)
+	ins := store.Instantiate(txn)
 
 	var (
 		prefixes = [][]byte{[]byte("a"), []byte("b"), []byte("c")}
@@ -23,27 +24,27 @@ func TestRefStore(t *testing.T) {
 
 	t.Run("Set", func(t *testing.T) {
 		for i, key := range keys {
-			err := store.Set(key, ref.NewRefEntry(prefixes[i]).WithValue(value))
+			err := ins.Set(key, ref.NewRefEntry(prefixes[i]).WithValue(value))
 			require.NoError(t, err)
 		}
 	})
 
 	t.Run("Get", func(t *testing.T) {
 		for i, p := range prefixes {
-			k, err := store.Get(p)
+			k, err := ins.Get(p)
 			require.NoError(t, err)
 			require.Equal(t, keys[i], k)
 		}
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
-		v, err := store.Get([]byte("d"))
+		v, err := ins.Get([]byte("d"))
 		require.Error(t, err)
 		require.Nil(t, v)
 	})
 
 	t.Run("Iterate", func(t *testing.T) {
-		iter := store.NewIterator(badger.DefaultIteratorOptions)
+		iter := ins.NewIterator(badger.DefaultIteratorOptions)
 		defer iter.Close()
 
 		actual, err := iters.Collect(iter)
@@ -55,10 +56,10 @@ func TestRefStore(t *testing.T) {
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		err := store.Delete(prefixes[0])
+		err := ins.Delete(prefixes[0])
 		require.NoError(t, err)
 
-		v, err := store.Get(prefixes[0])
+		v, err := ins.Get(prefixes[0])
 		require.Error(t, err)
 		require.Nil(t, v)
 	})

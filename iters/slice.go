@@ -5,9 +5,10 @@ import (
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
+	"github.com/ehsanranjbar/badgerutils/codec/lex"
 )
 
-func Slice[T any](s []T) badgerutils.Iterator[T] {
+func Slice[T any](s []T) badgerutils.Iterator[[]byte, T] {
 	return &sliceIterator[T]{s: s}
 }
 
@@ -46,7 +47,7 @@ func (it *sliceIterator[T]) Valid() bool {
 
 // Key implements the Iterator interface.
 func (it *sliceIterator[T]) Key() []byte {
-	return binary.BigEndian.AppendUint64(nil, uint64(it.i))
+	return lex.EncodeInt64(int64(it.i))
 }
 
 // Value implements the Iterator interface.

@@ -6,21 +6,25 @@ import (
 
 // Extension is an extension to the object store.
 type Extension[T any] interface {
-	Init(store badgerutils.BadgerStore, iter badgerutils.Iterator[*T]) error
-	OnDelete(key []byte, value *T) error
-	OnSet(key []byte, old, new *T, opts ...any) error
-	Drop() error
+	badgerutils.Instantiator[ExtensionInstance[T]]
+	Init(store badgerutils.Instantiator[badgerutils.BadgerStore])
 }
 
-// SpecificOption is an option that is specific to an extension.
-type SpecificOption struct {
+// ExtensionInstance is an extension to the object store.
+type ExtensionInstance[T any] interface {
+	OnDelete(key []byte, value *T) error
+	OnSet(key []byte, old, new *T, opts ...any) error
+}
+
+// ExtOption is an option that is specific to an extension.
+type ExtOption struct {
 	extName string
 	value   any
 }
 
-// WithSpecificOption creates a specific option.
-func WithSpecificOption(name string, value any) SpecificOption {
-	return SpecificOption{
+// WithExtOption creates a specific option.
+func WithExtOption(name string, value any) ExtOption {
+	return ExtOption{
 		extName: name,
 		value:   value,
 	}

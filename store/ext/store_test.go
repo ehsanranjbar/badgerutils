@@ -32,17 +32,17 @@ func (i TestIndexer) Index(v *TestStruct, update bool) ([]badgerutils.RawKVPair,
 	return []badgerutils.RawKVPair{}, nil
 }
 
-func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partition], error) {
+func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[[]byte, indexing.Partition], error) {
 	return nil, nil
 }
 
 func TestObjectStore(t *testing.T) {
-	txn := testutil.PrepareTxn(t, true)
+	store := extstore.New[TestStruct](nil, map[string]extstore.Extension[TestStruct]{
+		"test": indexing.NewExtension(TestIndexer{}),
+	})
 
-	store := extstore.New[TestStruct](txn)
-	idx := TestIndexer{}
-	ext := indexing.NewExtension(idx)
-	store.AddExtension("test", ext)
+	txn := testutil.PrepareTxn(t, true)
+	ins := store.Instantiate(txn)
 
 	var (
 		keys    = [][]byte{{1}, {2}, {3}}
@@ -55,28 +55,28 @@ func TestObjectStore(t *testing.T) {
 
 	t.Run("NotFound", func(t *testing.T) {
 		for _, key := range keys {
-			_, err := store.Get(key)
+			_, err := ins.Get(key)
 			require.Error(t, err)
 		}
 	})
 
 	t.Run("Set", func(t *testing.T) {
 		for i, key := range keys {
-			err := store.Set(key, objects[i])
+			err := ins.Set(key, objects[i])
 			require.NoError(t, err)
 		}
 	})
 
 	t.Run("Get", func(t *testing.T) {
 		for i, key := range keys {
-			v, err := store.Get(key)
+			v, err := ins.Get(key)
 			require.NoError(t, err)
 			require.Equal(t, objects[i], v)
 		}
 	})
 
 	t.Run("Iterate", func(t *testing.T) {
-		iter := store.NewIterator(badger.DefaultIteratorOptions)
+		iter := ins.NewIterator(badger.DefaultIteratorOptions)
 		defer iter.Close()
 
 		actual, err := iters.Collect(iter)
@@ -87,7 +87,7 @@ func TestObjectStore(t *testing.T) {
 
 	t.Run("Delete", func(t *testing.T) {
 		for _, key := range keys {
-			err := store.Delete(key)
+			err := ins.Delete(key)
 			require.NoError(t, err)
 		}
 	})

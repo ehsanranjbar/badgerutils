@@ -7,8 +7,9 @@ import (
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
+	extstore "github.com/ehsanranjbar/badgerutils/store/ext"
 	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
-	"github.com/vmihailenco/msgpack/v5"
+	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
 var (
@@ -21,7 +22,7 @@ type AssociateStore[
 	U encoding.BinaryMarshaler,
 	PU sstore.PointerBinaryUnmarshaler[U],
 ] struct {
-	store     badgerutils.Store[U]
+	store     badgerutils.Instantiator[badgerutils.StoreInstance[[]byte, *U, *U, badgerutils.Iterator[[]byte, *U]]]
 	synthFunc func(key []byte, oldV *T, newV T, oldU, newU *U) (*U, error)
 }
 
@@ -50,58 +51,45 @@ func WithSynthFunc[
 }
 
 // Init implements the Extension interface.
-func (as *AssociateStore[T, U, PU]) Init(store badgerutils.BadgerStore, iter badgerutils.Iterator[*T]) error {
+func (as *AssociateStore[T, U, PU]) Init(store badgerutils.Instantiator[badgerutils.BadgerStore]) {
 	as.store = sstore.New[U, PU](store)
-
-	initialized, err := as.isInitialized()
-	if err != nil {
-		return err
-	}
-	if !initialized {
-		err := as.populateIter(iter)
-		if err != nil {
-			return err
-		}
-
-		err = as.setInitialized()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
-func (as *AssociateStore[T, U, PU]) isInitialized() (bool, error) {
-	_, err := as.store.Get(nil)
-	if err == badger.ErrKeyNotFound {
-		return false, nil
+// Instantiate implements the Extension interface.
+func (as *AssociateStore[T, U, PU]) Instantiate(txn *badger.Txn) extstore.ExtensionInstance[T] {
+	return &AssociateStoreInstance[T, U, PU]{
+		store:     as.store.Instantiate(txn),
+		synthFunc: as.synthFunc,
 	}
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
 }
 
-func (as *AssociateStore[T, U, PU]) populateIter(iter badgerutils.Iterator[*T]) error {
-	for iter.Rewind(); iter.Valid(); iter.Next() {
-		k := iter.Key()
-		v, err := iter.Value()
-		if err != nil {
-			return err
-		}
-
-		err = as.set(k, nil, v, nil)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+// AssociateStoreInstance is an extension to store additional along with the main object.
+type AssociateStoreInstance[
+	T any,
+	U encoding.BinaryMarshaler,
+	PU sstore.PointerBinaryUnmarshaler[U],
+] struct {
+	store     badgerutils.StoreInstance[[]byte, *U, *U, badgerutils.Iterator[[]byte, *U]]
+	synthFunc func(key []byte, oldV *T, newV T, oldU, newU *U) (*U, error)
 }
 
-func (as *AssociateStore[T, U, PU]) set(k []byte, oldV, newV *T, u *U) error {
+// OnDelete implements the Extension interface.
+func (as *AssociateStoreInstance[T, U, PU]) OnDelete(key []byte, value *T) error {
+	key = append(associateDataPrefix, key...)
+	return as.store.Delete(key)
+}
+
+// OnSet implements the Extension interface.
+func (as *AssociateStoreInstance[T, U, PU]) OnSet(key []byte, old, new *T, opts ...any) error {
+	opt, ok := findAs[AssociateData[U]](opts)
+	if ok {
+		return as.set(key, old, new, &opt.data)
+	}
+
+	return as.set(key, old, new, nil)
+}
+
+func (as *AssociateStoreInstance[T, U, PU]) set(k []byte, oldV, newV *T, u *U) error {
 	if as.synthFunc != nil {
 		oldU, err := as.Get(k)
 		if err != nil && err != badger.ErrKeyNotFound {
@@ -125,33 +113,8 @@ func (as *AssociateStore[T, U, PU]) set(k []byte, oldV, newV *T, u *U) error {
 	return as.store.Set(k, u)
 }
 
-func (as *AssociateStore[T, U, PU]) setInitialized() error {
-	return as.store.Set(nil, nil)
-}
-
-// OnDelete implements the Extension interface.
-func (as *AssociateStore[T, U, PU]) OnDelete(key []byte, value *T) error {
-	key = append(associateDataPrefix, key...)
-	return as.store.Delete(key)
-}
-
-// OnSet implements the Extension interface.
-func (as *AssociateStore[T, U, PU]) OnSet(key []byte, old, new *T, opts ...any) error {
-	opt, ok := findAs[AssociateData[U]](opts)
-	if ok {
-		return as.set(key, old, new, &opt.data)
-	}
-
-	return as.set(key, old, new, nil)
-}
-
-// Drop implements the Extension interface.
-func (as *AssociateStore[T, U, PU]) Drop() error {
-	return nil
-}
-
 // Get gets the associated data.
-func (as *AssociateStore[T, U, PU]) Get(key []byte) (*U, error) {
+func (as *AssociateStoreInstance[T, U, PU]) Get(key []byte) (*U, error) {
 	key = append(associateDataPrefix, key...)
 	u, err := as.store.Get(key)
 	if err == badger.ErrKeyNotFound {

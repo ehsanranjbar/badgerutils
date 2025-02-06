@@ -16,16 +16,18 @@ import (
 )
 
 func TestLookupPartitions(t *testing.T) {
-	txn := testutil.PrepareTxn(t, true)
+	store := refstore.New(nil)
 
-	store := refstore.New(txn)
+	txn := testutil.PrepareTxn(t, true)
+	ins := store.Instantiate(txn).(*refstore.Instance)
+
 	var n uint64 = 0
 	for i := 'A'; i <= 'Z'; i++ {
-		store.Set(binary.BigEndian.AppendUint64(nil, n), refstore.NewRefEntry([]byte{byte(i)}))
+		ins.Set(binary.BigEndian.AppendUint64(nil, n), refstore.NewRefEntry([]byte{byte(i)}))
 		n++
 
 		for j := 'A'; j <= 'Z'; j++ {
-			store.Set(binary.BigEndian.AppendUint64(nil, n), refstore.NewRefEntry([]byte{byte(i), byte(j)}))
+			ins.Set(binary.BigEndian.AppendUint64(nil, n), refstore.NewRefEntry([]byte{byte(i), byte(j)}))
 			n++
 		}
 	}
@@ -144,7 +146,7 @@ func TestLookupPartitions(t *testing.T) {
 	for _, test := range tests {
 		for _, opt := range opts {
 			t.Run(test.name, func(t *testing.T) {
-				it := indexing.LookupPartitions(store, iters.Slice(test.parts), opt)
+				it := indexing.LookupPartitions(ins, iters.Slice(test.parts), opt)
 				defer it.Close()
 
 				actual, err := iters.Collect(it)

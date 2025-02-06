@@ -4,39 +4,35 @@ import (
 	"testing"
 
 	"github.com/ehsanranjbar/badgerutils/extutil"
-	"github.com/ehsanranjbar/badgerutils/iters"
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAssociateStore(t *testing.T) {
-	txn := testutil.PrepareTxn(t, true)
-
-	store := pstore.New(txn, []byte("test"))
 	as := extutil.NewAssociateStore(
 		extutil.WithSynthFunc(
 			extutil.MetadataSynthFunc[struct{}](true),
 		),
 	)
+	store := pstore.New(nil, []byte("test"))
+	as.Init(store)
 
-	t.Run("Init", func(t *testing.T) {
-		err := as.Init(store, iters.Slice([]*struct{}{}))
-		require.NoError(t, err)
-	})
+	txn := testutil.PrepareTxn(t, true)
+	ins := as.Instantiate(txn).(*extutil.AssociateStoreInstance[struct{}, extutil.Metadata, *extutil.Metadata])
 
 	t.Run("OnSet", func(t *testing.T) {
-		err := as.OnSet([]byte("key"), nil, &struct{}{})
+		err := ins.OnSet([]byte("key"), nil, &struct{}{})
 		require.NoError(t, err)
-		metadata, err := as.Get([]byte("key"))
+		metadata, err := ins.Get([]byte("key"))
 		require.NoError(t, err)
 		require.NotNil(t, metadata)
 		require.Contains(t, *metadata, "created_at")
 		require.Contains(t, *metadata, "updated_at")
 
-		err = as.OnSet([]byte("key"), &struct{}{}, &struct{}{}, extutil.WithAssociateData(extutil.Metadata{"key": "value"}))
+		err = ins.OnSet([]byte("key"), &struct{}{}, &struct{}{}, extutil.WithAssociateData(extutil.Metadata{"key": "value"}))
 		require.NoError(t, err)
-		metadata, err = as.Get([]byte("key"))
+		metadata, err = ins.Get([]byte("key"))
 		require.NoError(t, err)
 		require.NotNil(t, metadata)
 		require.Contains(t, *metadata, "key")
@@ -45,15 +41,10 @@ func TestAssociateStore(t *testing.T) {
 	})
 
 	t.Run("OnDelete", func(t *testing.T) {
-		err := as.OnDelete([]byte("key"), &struct{}{})
+		err := ins.OnDelete([]byte("key"), &struct{}{})
 		require.NoError(t, err)
-		metadata, err := as.Get([]byte("key"))
+		metadata, err := ins.Get([]byte("key"))
 		require.NoError(t, err)
 		require.Nil(t, metadata)
-	})
-
-	t.Run("Drop", func(t *testing.T) {
-		err := as.Drop()
-		require.NoError(t, err)
 	})
 }

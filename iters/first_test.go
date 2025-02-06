@@ -12,9 +12,10 @@ import (
 )
 
 func TestFirst(t *testing.T) {
-	txn := testutil.PrepareTxn(t, true)
+	store := sstore.New[StructA](pstore.New(nil, []byte("v")))
 
-	store := sstore.New[StructA](pstore.New(txn, []byte("v")))
+	txn := testutil.PrepareTxn(t, true)
+	ins := store.Instantiate(txn)
 
 	var (
 		keys   = [][]byte{[]byte("foo1"), []byte("foo2")}
@@ -22,11 +23,11 @@ func TestFirst(t *testing.T) {
 	)
 
 	for i, key := range keys {
-		err := store.Set(key, values[i])
+		err := ins.Set(key, values[i])
 		require.NoError(t, err)
 	}
 
-	iter := store.NewIterator(badger.IteratorOptions{
+	iter := ins.NewIterator(badger.IteratorOptions{
 		Prefix: []byte("foo"),
 	})
 	defer iter.Close()

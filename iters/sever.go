@@ -8,29 +8,29 @@ import (
 )
 
 // SeverIterator is an iterator that severs (stops) the iteration when the predicate is true.
-type SeverIterator[T any] struct {
-	base    badgerutils.Iterator[T]
-	pred    func(k []byte, v T, item *badger.Item) bool
+type SeverIterator[K, V any] struct {
+	base    badgerutils.Iterator[K, V]
+	pred    func(k K, v V, item *badger.Item) bool
 	severed bool
 }
 
 // Sever creates a new sever iterator.
-func Sever[T any](base badgerutils.Iterator[T], f func([]byte, T, *badger.Item) bool) *SeverIterator[T] {
-	return &SeverIterator[T]{base: base, pred: f}
+func Sever[K, V any](base badgerutils.Iterator[K, V], f func(K, V, *badger.Item) bool) *SeverIterator[K, V] {
+	return &SeverIterator[K, V]{base: base, pred: f}
 }
 
 // Close implements the Iterator interface.
-func (it *SeverIterator[T]) Close() {
+func (it *SeverIterator[K, V]) Close() {
 	it.base.Close()
 }
 
 // Item implements the Iterator interface.
-func (it *SeverIterator[T]) Item() *badger.Item {
+func (it *SeverIterator[K, V]) Item() *badger.Item {
 	return it.base.Item()
 }
 
 // Next implements the Iterator interface.
-func (it *SeverIterator[T]) Next() {
+func (it *SeverIterator[K, V]) Next() {
 	if it.severed {
 		return
 	}
@@ -41,7 +41,7 @@ func (it *SeverIterator[T]) Next() {
 	}
 }
 
-func (it *SeverIterator[T]) checkSevered() {
+func (it *SeverIterator[K, V]) checkSevered() {
 	value, err := it.base.Value()
 	if err != nil || it.pred(it.base.Key(), value, it.base.Item()) {
 		it.severed = true
@@ -52,29 +52,29 @@ func (it *SeverIterator[T]) checkSevered() {
 }
 
 // Rewind implements the Iterator interface.
-func (it *SeverIterator[T]) Rewind() {
+func (it *SeverIterator[K, V]) Rewind() {
 	it.base.Rewind()
 	it.checkSevered()
 }
 
 // Seek implements the Iterator interface.
-func (it *SeverIterator[T]) Seek(key []byte) {
+func (it *SeverIterator[K, V]) Seek(key []byte) {
 	it.base.Seek(key)
 	it.checkSevered()
 }
 
 // Valid implements the Iterator interface.
-func (it *SeverIterator[T]) Valid() bool {
+func (it *SeverIterator[K, V]) Valid() bool {
 	return it.base.Valid() && !it.severed
 }
 
 // Key implements the Iterator interface.
-func (it *SeverIterator[T]) Key() []byte {
+func (it *SeverIterator[K, V]) Key() K {
 	return it.base.Key()
 }
 
 // Value implements the Iterator interface.
-func (it *SeverIterator[T]) Value() (value T, err error) {
+func (it *SeverIterator[K, V]) Value() (value V, err error) {
 	if it.severed {
 		return value, fmt.Errorf("unable to return value in a severed iterator")
 	}

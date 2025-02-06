@@ -49,12 +49,11 @@ func New[
 	D encoding.BinaryMarshaler,
 	PD sstore.PointerBinaryUnmarshaler[D],
 ](
-	base badgerutils.BadgerStore,
+	base badgerutils.Instantiator[badgerutils.BadgerStore],
 	opts ...func(*Store[I, D, PD]),
 ) (*Store[I, D, PD], error) {
 	s := &Store[I, D, PD]{
-		dataStore: extstore.New[D, PD](base),
-		indexers:  map[string]*indexing.Extension[D]{},
+		indexers: map[string]*indexing.Extension[D]{},
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -71,18 +70,14 @@ func New[
 		s.metaStore = extutil.NewAssociateStore[D, extutil.Metadata]()
 	}
 
-	err := s.dataStore.AddExtension("meta_associate_store", s.metaStore)
-	if err != nil {
-		return nil, fmt.Errorf("failed to add meta_associate_store extension: %w", err)
+	exts := map[string]extstore.Extension[D]{
+		"meta_associate_store": s.metaStore,
 	}
-
 	for name, idx := range s.indexers {
 		extName := "idx/" + name
-		err := s.dataStore.AddExtension(extName, idx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to add indexer extension %q: %w", name, err)
-		}
+		exts[extName] = idx
 	}
+	s.dataStore = extstore.New[D, PD](base, exts)
 
 	if s.extractor == nil {
 		s.extractor = schema.NewReflectPathExtractor[D](true)
@@ -144,7 +139,7 @@ func WithIndexer[
 			panic("indexer already exists")
 		}
 
-		s.indexers[name] = indexing.NewExtension(idx)
+		s.indexers[name] = indexing.NewExtension(idx).(*indexing.Extension[D])
 	}
 }
 
@@ -179,8 +174,42 @@ func (s *Store[I, D, PD]) Prefix() []byte {
 	return s.dataStore.Prefix()
 }
 
+// Instantiate implements the badgerutils.Instantiator interface.
+func (s *Store[I, D, PD]) Instantiate(txn *badger.Txn) *Instance[I, D, PD] {
+	return &Instance[I, D, PD]{
+		dataStore: s.dataStore.Instantiate(txn),
+		idFunc:    s.idFunc,
+		idCodec:   s.idCodec,
+		metaStore: s.metaStore.Instantiate(txn).(*extutil.AssociateStoreInstance[D, extutil.Metadata, *extutil.Metadata]),
+		extractor: s.extractor,
+	}
+}
+
+// Indexer returns the indexer with given name.
+func (s *Store[I, D, PD]) Indexer(name string) *indexing.Extension[D] {
+	idx, ok := s.indexers[name]
+	if !ok {
+		return nil
+	}
+
+	return idx
+}
+
+// Instance is an instance of the Store.
+type Instance[
+	I any,
+	D encoding.BinaryMarshaler,
+	PD sstore.PointerBinaryUnmarshaler[D],
+] struct {
+	dataStore *extstore.Instance[D, PD]
+	idFunc    func(*D) (I, error)
+	idCodec   codec.Codec[I]
+	metaStore *extutil.AssociateStoreInstance[D, extutil.Metadata, *extutil.Metadata]
+	extractor schema.PathExtractor[D]
+}
+
 // Delete deletes the key from the store.
-func (s *Store[I, D, PD]) Delete(id I) error {
+func (s *Instance[I, D, PD]) Delete(id I) error {
 	key, err := s.idCodec.Encode(id)
 	if err != nil {
 		return err
@@ -190,7 +219,7 @@ func (s *Store[I, D, PD]) Delete(id I) error {
 }
 
 // Get gets the object with given id from the store.
-func (s *Store[I, D, PD]) Get(id I) (*D, error) {
+func (s *Instance[I, D, PD]) Get(id I) (*D, error) {
 	key, err := s.idCodec.Encode(id)
 	if err != nil {
 		return nil, err
@@ -200,7 +229,7 @@ func (s *Store[I, D, PD]) Get(id I) (*D, error) {
 }
 
 // GetObject gets the object with given id from the store.
-func (s *Store[I, D, PD]) GetObject(id I) (*Object[I, D], error) {
+func (s *Instance[I, D, PD]) GetObject(id I) (*Object[I, D], error) {
 	key, err := s.idCodec.Encode(id)
 	if err != nil {
 		return nil, err
@@ -223,12 +252,12 @@ func (s *Store[I, D, PD]) GetObject(id I) (*Object[I, D], error) {
 }
 
 // NewIterator creates a new iterator over the objects.
-func (s *Store[I, D, PD]) NewIterator(opts badger.IteratorOptions) *Iterator[I, D] {
-	return newIterator(s.dataStore.NewIterator(opts), s.idCodec, s.metaStore, true)
+func (s *Instance[I, D, PD]) NewIterator(opts badger.IteratorOptions) *Iterator[I, D] {
+	return newIterator[I, D](s.dataStore.NewIterator(opts), s.idCodec, s.metaStore, true)
 }
 
 // Set sets the object with given id to the store.
-func (s *Store[I, D, PD]) Set(d D, opts ...func(*Object[I, D])) error {
+func (s *Instance[I, D, PD]) Set(d D, opts ...func(*Object[I, D])) error {
 	obj := &Object[I, D]{Data: d}
 	for _, opt := range opts {
 		opt(obj)
@@ -276,7 +305,7 @@ func WithMetadata[
 }
 
 // SetObject sets the object to the store.
-func (s *Store[I, D, PD]) SetObject(obj *Object[I, D]) error {
+func (s *Instance[I, D, PD]) SetObject(obj *Object[I, D]) error {
 	if obj.Id == nil {
 		return fmt.Errorf("nil id is not allowed")
 	}
@@ -289,35 +318,8 @@ func (s *Store[I, D, PD]) SetObject(obj *Object[I, D]) error {
 	return s.dataStore.SetWithOptions(key, &obj.Data, extutil.WithAssociateData(extutil.Metadata(obj.Metadata)))
 }
 
-// AddIndexer adds an indexer to the store.
-func (s *Store[I, D, PD]) AddIndexer(name string, idx indexing.Indexer[D]) error {
-	if _, ok := s.indexers[name]; ok {
-		return fmt.Errorf("indexer %q already exists", name)
-	}
-
-	idxExt := indexing.NewExtension(idx)
-	extName := "idx/" + name
-	err := s.dataStore.AddExtension(extName, idxExt)
-	if err != nil {
-		return fmt.Errorf("failed to add indexer extension %q: %w", name, err)
-	}
-
-	s.indexers[name] = idxExt
-	return nil
-}
-
-// Indexer returns the indexer with given name.
-func (s *Store[I, D, PD]) Indexer(name string) *indexing.Extension[D] {
-	idx, ok := s.indexers[name]
-	if !ok {
-		return nil
-	}
-
-	return idx
-}
-
 // Query returns the query for the store.
-func (s *Store[I, D, PD]) Query(q string) (badgerutils.Iterator[*Object[I, D]], error) {
+func (s *Instance[I, D, PD]) Query(q string) (badgerutils.Iterator[[]byte, *Object[I, D]], error) {
 	qe, err := expr.ParseExpression(q)
 	if err != nil {
 		return nil, err

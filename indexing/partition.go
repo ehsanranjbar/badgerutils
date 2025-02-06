@@ -21,12 +21,12 @@ func NewPartition(low, high *expr.Bound[[]byte]) Partition {
 
 // LookupPartitions returns an iterator that iterates over the keys in the given partition iterator.
 func LookupPartitions(
-	store *refstore.Store,
-	parts badgerutils.Iterator[Partition],
+	store *refstore.Instance,
+	parts badgerutils.Iterator[[]byte, Partition],
 	opts badger.IteratorOptions,
-) badgerutils.Iterator[[]byte] {
+) badgerutils.Iterator[[]byte, []byte] {
 	return iters.Flatten(
-		iters.Map(parts, func(p Partition, _ *badger.Item) (badgerutils.Iterator[[]byte], error) {
+		iters.Map(parts, func(p Partition, _ *badger.Item) (badgerutils.Iterator[[]byte, []byte], error) {
 			// Omitting the prefix option.
 			iter := store.NewIterator(badger.IteratorOptions{
 				PrefetchSize:   opts.PrefetchSize,

@@ -6,29 +6,29 @@ import (
 )
 
 // LimitIterator is an iterator that limits the number of items when calling Next.
-type LimitIterator[T any] struct {
-	base badgerutils.Iterator[T]
+type LimitIterator[K, V any] struct {
+	base badgerutils.Iterator[K, V]
 	n    int
 	i    int
 }
 
 // Limit creates a new limit iterator.
-func Limit[T any](base badgerutils.Iterator[T], n int) *LimitIterator[T] {
-	return &LimitIterator[T]{base: base, n: n}
+func Limit[K, V any](base badgerutils.Iterator[K, V], n int) *LimitIterator[K, V] {
+	return &LimitIterator[K, V]{base: base, n: n}
 }
 
 // Close implements the Iterator interface.
-func (it *LimitIterator[T]) Close() {
+func (it *LimitIterator[K, V]) Close() {
 	it.base.Close()
 }
 
 // Item implements the Iterator interface.
-func (it *LimitIterator[T]) Item() *badger.Item {
+func (it *LimitIterator[K, V]) Item() *badger.Item {
 	return it.base.Item()
 }
 
 // Next implements the Iterator interface.
-func (it *LimitIterator[T]) Next() {
+func (it *LimitIterator[K, V]) Next() {
 	if it.i < it.n {
 		it.base.Next()
 		it.i++
@@ -36,28 +36,28 @@ func (it *LimitIterator[T]) Next() {
 }
 
 // Rewind implements the Iterator interface.
-func (it *LimitIterator[T]) Rewind() {
+func (it *LimitIterator[K, V]) Rewind() {
 	it.base.Rewind()
 	it.i = 0
 }
 
 // Seek implements the Iterator interface.
-func (it *LimitIterator[T]) Seek(key []byte) {
+func (it *LimitIterator[K, V]) Seek(key []byte) {
 	it.base.Seek(key)
 	it.i = 0
 }
 
 // Valid implements the Iterator interface.
-func (it *LimitIterator[T]) Valid() bool {
+func (it *LimitIterator[K, V]) Valid() bool {
 	return it.i < it.n && it.base.Valid()
 }
 
 // Key implements the Iterator interface.
-func (it *LimitIterator[T]) Key() []byte {
+func (it *LimitIterator[K, V]) Key() K {
 	return it.base.Key()
 }
 
 // Value implements the Iterator interface.
-func (it *LimitIterator[T]) Value() (value T, err error) {
+func (it *LimitIterator[K, V]) Value() (value V, err error) {
 	return it.base.Value()
 }

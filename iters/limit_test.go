@@ -11,9 +11,10 @@ import (
 )
 
 func TestLimit(t *testing.T) {
-	txn := testutil.PrepareTxn(t, true)
+	store := sstore.New[StructA](nil)
 
-	store := sstore.New[StructA](txn)
+	txn := testutil.PrepareTxn(t, true)
+	ins := store.Instantiate(txn)
 
 	var (
 		keys   = [][]byte{[]byte("foo1"), []byte("foo2")}
@@ -21,11 +22,11 @@ func TestLimit(t *testing.T) {
 	)
 
 	for i, key := range keys {
-		err := store.Set(key, values[i])
+		err := ins.Set(key, values[i])
 		require.NoError(t, err)
 	}
 
-	iter := iters.Limit(store.NewIterator(badger.DefaultIteratorOptions), 1)
+	iter := iters.Limit(ins.NewIterator(badger.DefaultIteratorOptions), 1)
 	defer iter.Close()
 
 	iter.Rewind()

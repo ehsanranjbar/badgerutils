@@ -24,9 +24,10 @@ func (i TestIndexer) Index(v *StructA, update bool) []badgerutils.RawKVPair {
 }
 
 func TestLookupIterator(t *testing.T) {
-	txn := testutil.PrepareTxn(t, true)
+	store := sstore.New[StructA](nil)
 
-	store := sstore.New[StructA](txn)
+	txn := testutil.PrepareTxn(t, true)
+	ins := store.Instantiate(txn)
 
 	var (
 		keys   = [][]byte{{1}, {2}}
@@ -34,11 +35,11 @@ func TestLookupIterator(t *testing.T) {
 	)
 
 	for i, key := range keys {
-		err := store.Set(key, values[i])
+		err := ins.Set(key, values[i])
 		require.NoError(t, err)
 	}
 
-	iter := iters.Lookup(store, iters.Slice(keys))
+	iter := iters.Lookup(ins, iters.Slice(keys))
 	defer iter.Close()
 
 	actual, err := iters.Collect(iter)

@@ -184,7 +184,7 @@ func propagateKeys(keys [][]byte, suffixes [][]byte) [][]byte {
 }
 
 // Lookup implements the Indexer interface.
-func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[expr.Range[[]byte]], error) {
+func (si *Indexer[T]) Lookup(args ...any) (badgerutils.Iterator[[]byte, expr.Range[[]byte]], error) {
 	exs, err := si.verifyExprs(args)
 	if err != nil {
 		return nil, fmt.Errorf("invalid lookup arguments: %w", err)

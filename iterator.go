@@ -6,10 +6,10 @@ import (
 
 // Iterator has the most common methods for *badger.Iterator along with a Value method
 // which is used in pretty much all high-level stuff of this package because we mostly work with serialized values.
-type Iterator[T any] interface {
+type Iterator[K, V any] interface {
 	BadgerIterator
-	Key() []byte
-	Value() (value T, err error)
+	Key() K
+	Value() (value V, err error)
 }
 
 // BadgerIterator is the interface that represents a badger iterator.

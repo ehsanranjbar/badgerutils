@@ -10,9 +10,10 @@ import (
 )
 
 func TestPrefixStore(t *testing.T) {
-	txn := testutil.PrepareTxn(t, true)
+	store := prefix.New(nil, []byte("prefix"))
 
-	store := prefix.New(txn, []byte("prefix"))
+	txn := testutil.PrepareTxn(t, true)
+	ins := store.Instantiate(txn)
 
 	t.Run("Prefix", func(t *testing.T) {
 		require.Equal(t, []byte("prefix"), store.Prefix())
@@ -25,17 +26,17 @@ func TestPrefixStore(t *testing.T) {
 	)
 
 	t.Run("Set", func(t *testing.T) {
-		err := store.Set(key, value)
+		err := ins.Set(key, value)
 		require.NoError(t, err)
 	})
 
 	t.Run("SetEntry", func(t *testing.T) {
-		err := store.SetEntry(&badger.Entry{Key: key, Value: value})
+		err := ins.SetEntry(&badger.Entry{Key: key, Value: value})
 		require.NoError(t, err)
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		item, err := store.Get(key)
+		item, err := ins.Get(key)
 		require.NoError(t, err)
 		require.NotNil(t, item)
 		item, err = txn.Get(append([]byte("prefix"), key...))
@@ -44,7 +45,7 @@ func TestPrefixStore(t *testing.T) {
 	})
 
 	t.Run("NewIterator", func(t *testing.T) {
-		iter := store.NewIterator(badger.IteratorOptions{Prefix: []byte("foo")})
+		iter := ins.NewIterator(badger.IteratorOptions{Prefix: []byte("foo")})
 		defer iter.Close()
 		require.NotNil(t, iter)
 
@@ -57,12 +58,12 @@ func TestPrefixStore(t *testing.T) {
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		err := store.Delete(key)
+		err := ins.Delete(key)
 		require.NoError(t, err)
 	})
 
 	t.Run("Get after Delete", func(t *testing.T) {
-		item, err := store.Get(key)
+		item, err := ins.Get(key)
 		require.Error(t, err)
 		require.Nil(t, item)
 	})

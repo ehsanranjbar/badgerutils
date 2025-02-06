@@ -11,21 +11,22 @@ import (
 )
 
 func TestIterator(t *testing.T) {
-	txn := testutil.PrepareTxn(t, true)
+	store := serialized.New[TestStruct](nil)
 
-	store := serialized.New[TestStruct](txn)
+	txn := testutil.PrepareTxn(t, true)
+	ins := store.Instantiate(txn)
 
 	var (
 		keys   = [][]byte{[]byte("foo1"), []byte("foo2")}
 		values = []*TestStruct{{A: 1, B: "bar1"}, {A: 2, B: "bar2"}}
 	)
 	for i, key := range keys {
-		err := store.Set(key, values[i])
+		err := ins.Set(key, values[i])
 		require.NoError(t, err)
 	}
 
 	t.Run("Iterate", func(t *testing.T) {
-		iter := store.NewIterator(badger.DefaultIteratorOptions)
+		iter := ins.NewIterator(badger.DefaultIteratorOptions)
 		defer iter.Close()
 
 		var (
@@ -48,9 +49,10 @@ func TestIterator(t *testing.T) {
 	})
 
 	t.Run("IteratePrefix", func(t *testing.T) {
-		store := serialized.New[TestStruct](pstore.New(txn, []byte("foo")))
+		store := serialized.New[TestStruct](pstore.New(nil, []byte("foo")))
 
-		iter := store.NewIterator(badger.DefaultIteratorOptions)
+		ins := store.Instantiate(txn)
+		iter := ins.NewIterator(badger.DefaultIteratorOptions)
 		defer iter.Close()
 
 		var (

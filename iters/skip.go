@@ -6,46 +6,46 @@ import (
 )
 
 // SkipIterator is an iterator that skips first items that doesn't satisfy the condition.
-type SkipIterator[T, S any] struct {
-	base  badgerutils.Iterator[T]
+type SkipIterator[K, V, S any] struct {
+	base  badgerutils.Iterator[K, V]
 	state S
-	f     func(S, []byte, T, *badger.Item) (S, bool)
+	f     func(S, K, V, *badger.Item) (S, bool)
 }
 
 // SkipN creates a new skip iterator that skips the first n items.
-func SkipN[T any](base badgerutils.Iterator[T], n int) *SkipIterator[T, int] {
-	return Skip[T, int](base, func(s int, k []byte, v T, item *badger.Item) (int, bool) {
+func SkipN[K, V any](base badgerutils.Iterator[K, V], n int) *SkipIterator[K, V, int] {
+	return Skip[K, V, int](base, func(s int, k K, v V, item *badger.Item) (int, bool) {
 		return s + 1, s < n
 	})
 }
 
 // Skip creates a new skip iterator.
-func Skip[T any, S any](base badgerutils.Iterator[T], f func(S, []byte, T, *badger.Item) (S, bool)) *SkipIterator[T, S] {
-	return &SkipIterator[T, S]{base: base, f: f}
+func Skip[K, V any, S any](base badgerutils.Iterator[K, V], f func(S, K, V, *badger.Item) (S, bool)) *SkipIterator[K, V, S] {
+	return &SkipIterator[K, V, S]{base: base, f: f}
 }
 
 // Close implements the Iterator interface.
-func (it *SkipIterator[T, S]) Close() {
+func (it *SkipIterator[K, V, S]) Close() {
 	it.base.Close()
 }
 
 // Item implements the Iterator interface.
-func (it *SkipIterator[T, S]) Item() *badger.Item {
+func (it *SkipIterator[K, V, S]) Item() *badger.Item {
 	return it.base.Item()
 }
 
 // Next implements the Iterator interface.
-func (it *SkipIterator[T, S]) Next() {
+func (it *SkipIterator[K, V, S]) Next() {
 	it.base.Next()
 }
 
 // Rewind implements the Iterator interface.
-func (it *SkipIterator[T, S]) Rewind() {
+func (it *SkipIterator[K, V, S]) Rewind() {
 	it.base.Rewind()
 	it.skip()
 }
 
-func (it *SkipIterator[T, S]) skip() {
+func (it *SkipIterator[K, V, S]) skip() {
 	for it.base.Valid() {
 		k := it.base.Key()
 		v, _ := it.base.Value()
@@ -60,22 +60,22 @@ func (it *SkipIterator[T, S]) skip() {
 }
 
 // Seek implements the Iterator interface.
-func (it *SkipIterator[T, S]) Seek(key []byte) {
+func (it *SkipIterator[K, V, S]) Seek(key []byte) {
 	it.base.Seek(key)
 	it.skip()
 }
 
 // Valid implements the Iterator interface.
-func (it *SkipIterator[T, S]) Valid() bool {
+func (it *SkipIterator[K, V, S]) Valid() bool {
 	return it.base.Valid()
 }
 
 // Key implements the Iterator interface.
-func (it *SkipIterator[T, S]) Key() []byte {
+func (it *SkipIterator[K, V, S]) Key() K {
 	return it.base.Key()
 }
 
 // Value implements the Iterator interface.
-func (it *SkipIterator[T, S]) Value() (value T, err error) {
+func (it *SkipIterator[K, V, S]) Value() (value V, err error) {
 	return it.base.Value()
 }

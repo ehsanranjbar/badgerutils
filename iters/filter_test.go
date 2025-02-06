@@ -11,20 +11,22 @@ import (
 )
 
 func TestFilter(t *testing.T) {
-	txn := testutil.PrepareTxn(t, true)
+	store := sstore.New[StructA](nil)
 
-	store := sstore.New[StructA](txn)
+	txn := testutil.PrepareTxn(t, true)
+	ins := store.Instantiate(txn)
+
 
 	var (
 		keys   = [][]byte{[]byte("foo1"), []byte("foo2")}
 		values = []*StructA{{A: 1}, {A: 2}}
 	)
 	for i, key := range keys {
-		err := store.Set(key, values[i])
+		err := ins.Set(key, values[i])
 		require.NoError(t, err)
 	}
 
-	iter := iters.Filter(store.NewIterator(badger.DefaultIteratorOptions), func(value *StructA, item *badger.Item) bool {
+	iter := iters.Filter(ins.NewIterator(badger.DefaultIteratorOptions), func(value *StructA, item *badger.Item) bool {
 		return value.A == 2
 	})
 	defer iter.Close()

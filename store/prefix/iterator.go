@@ -20,8 +20,13 @@ func NewIterator(base badgerutils.BadgerIterator, prefix []byte) *Iterator {
 }
 
 // NewIteratorFromStore creates a new iterator from a prefix store.
-func NewIteratorFromStore(store *Store) *Iterator {
-	return NewIterator(store.NewIterator(badger.DefaultIteratorOptions), store.Prefix())
+func NewIteratorFromStore(store badgerutils.BadgerStore) *Iterator {
+	var prefix []byte
+	if pfx, ok := store.(prefixed); ok {
+		prefix = pfx.Prefix()
+	}
+
+	return NewIterator(store.NewIterator(badger.DefaultIteratorOptions), prefix)
 }
 
 // Close closes the iterator.

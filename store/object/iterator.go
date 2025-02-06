@@ -11,16 +11,16 @@ import (
 
 // Iterator is an iterator that unmarshal id, data and optionally fetch metadata.
 type Iterator[I any, D encoding.BinaryMarshaler] struct {
-	base      badgerutils.Iterator[*D]
+	base      badgerutils.Iterator[[]byte, *D]
 	idCodec   codec.Codec[I]
-	metaStore *extutil.AssociateStore[D, extutil.Metadata, *extutil.Metadata]
+	metaStore *extutil.AssociateStoreInstance[D, extutil.Metadata, *extutil.Metadata]
 	fetchMeta bool
 }
 
 func newIterator[I any, D encoding.BinaryMarshaler](
-	base badgerutils.Iterator[*D],
+	base badgerutils.Iterator[[]byte, *D],
 	idCodec codec.Codec[I],
-	metaStore *extutil.AssociateStore[D, extutil.Metadata, *extutil.Metadata],
+	metaStore *extutil.AssociateStoreInstance[D, extutil.Metadata, *extutil.Metadata],
 	fetchMeta bool,
 ) *Iterator[I, D] {
 	return &Iterator[I, D]{

@@ -10,7 +10,7 @@ import (
 )
 
 // PopulateRoaring32 populates a roaring bitmap with 32-bit integers from an iterator of byte slices.
-func PopulateRoaring32(bm *roaring.Bitmap, iter badgerutils.Iterator[[]byte]) error {
+func PopulateRoaring32(bm *roaring.Bitmap, iter badgerutils.Iterator[[]byte, []byte]) error {
 	for iter.Rewind(); iter.Valid(); iter.Next() {
 		v, err := iter.Value()
 		if err != nil {
@@ -23,7 +23,7 @@ func PopulateRoaring32(bm *roaring.Bitmap, iter badgerutils.Iterator[[]byte]) er
 }
 
 // PopulateRoaring64 populates a roaring bitmap with 64-bit integers from an iterator of byte slices.
-func PopulateRoaring64(bm *roaring64.Bitmap, iter badgerutils.Iterator[[]byte]) error {
+func PopulateRoaring64(bm *roaring64.Bitmap, iter badgerutils.Iterator[[]byte, []byte]) error {
 	for iter.Rewind(); iter.Valid(); iter.Next() {
 		v, err := iter.Value()
 		if err != nil {

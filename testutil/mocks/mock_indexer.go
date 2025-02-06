@@ -82,7 +82,7 @@ func (_c *MockIndexer_Index_Call[T]) RunAndReturn(run func(*T, bool) ([]badgerut
 }
 
 // Lookup provides a mock function with given fields: args
-func (_m *MockIndexer[T]) Lookup(args ...any) (badgerutils.Iterator[indexing.Partition], error) {
+func (_m *MockIndexer[T]) Lookup(args ...any) (badgerutils.Iterator[[]byte, indexing.Partition], error) {
 	var _ca []interface{}
 	_ca = append(_ca, args...)
 	ret := _m.Called(_ca...)
@@ -91,16 +91,16 @@ func (_m *MockIndexer[T]) Lookup(args ...any) (badgerutils.Iterator[indexing.Par
 		panic("no return value specified for Lookup")
 	}
 
-	var r0 badgerutils.Iterator[indexing.Partition]
+	var r0 badgerutils.Iterator[[]byte, indexing.Partition]
 	var r1 error
-	if rf, ok := ret.Get(0).(func(...any) (badgerutils.Iterator[indexing.Partition], error)); ok {
+	if rf, ok := ret.Get(0).(func(...any) (badgerutils.Iterator[[]byte, indexing.Partition], error)); ok {
 		return rf(args...)
 	}
-	if rf, ok := ret.Get(0).(func(...any) badgerutils.Iterator[indexing.Partition]); ok {
+	if rf, ok := ret.Get(0).(func(...any) badgerutils.Iterator[[]byte, indexing.Partition]); ok {
 		r0 = rf(args...)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(badgerutils.Iterator[indexing.Partition])
+			r0 = ret.Get(0).(badgerutils.Iterator[[]byte, indexing.Partition])
 		}
 	}
 
@@ -138,12 +138,12 @@ func (_c *MockIndexer_Lookup_Call[T]) Run(run func(args ...any)) *MockIndexer_Lo
 	return _c
 }
 
-func (_c *MockIndexer_Lookup_Call[T]) Return(_a0 badgerutils.Iterator[indexing.Partition], _a1 error) *MockIndexer_Lookup_Call[T] {
+func (_c *MockIndexer_Lookup_Call[T]) Return(_a0 badgerutils.Iterator[[]byte, indexing.Partition], _a1 error) *MockIndexer_Lookup_Call[T] {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockIndexer_Lookup_Call[T]) RunAndReturn(run func(...any) (badgerutils.Iterator[indexing.Partition], error)) *MockIndexer_Lookup_Call[T] {
+func (_c *MockIndexer_Lookup_Call[T]) RunAndReturn(run func(...any) (badgerutils.Iterator[[]byte, indexing.Partition], error)) *MockIndexer_Lookup_Call[T] {
 	_c.Call.Return(run)
 	return _c
 }

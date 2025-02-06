@@ -3,18 +3,19 @@ package indexing
 import (
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
+	"github.com/ehsanranjbar/badgerutils/store/ext"
 	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
 )
 
 // Extension is an extension for extensible stores that indexes the data with a given indexer.
 type Extension[T any] struct {
-	store      badgerutils.BadgerStore
 	indexer    Indexer[T]
 	descriptor IndexDescriptor
+	store      *refstore.Store
 }
 
 // NewExtension creates a new Extension.
-func NewExtension[T any](indexer Indexer[T]) *Extension[T] {
+func NewExtension[T any](indexer Indexer[T]) ext.Extension[T] {
 	descriptor, _ := indexer.(IndexDescriptor)
 	return &Extension[T]{
 		indexer:    indexer,
@@ -23,82 +24,31 @@ func NewExtension[T any](indexer Indexer[T]) *Extension[T] {
 }
 
 // Init implements the extensible.Extension interface.
-func (e *Extension[T]) Init(
-	store badgerutils.BadgerStore,
-	iter badgerutils.Iterator[*T],
-) error {
-	e.store = store
-
-	initialized, err := e.isInitialized()
-	if err != nil {
-		return err
-	}
-	if !initialized {
-		err := e.indexIter(iter)
-		if err != nil {
-			return err
-		}
-
-		err = e.setInitialized()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+func (e *Extension[T]) Init(store badgerutils.Instantiator[badgerutils.BadgerStore]) {
+	e.store = refstore.New(store)
 }
 
-func (e *Extension[T]) isInitialized() (bool, error) {
-	_, err := e.store.Get(nil)
-	if err == badger.ErrKeyNotFound {
-		return false, nil
+// Instantiate implements the extensible.Extension interface.
+func (e *Extension[T]) Instantiate(txn *badger.Txn) ext.ExtensionInstance[T] {
+	return &ExtensionInstance[T]{
+		ext:   e,
+		store: e.store.Instantiate(txn).(*refstore.Instance),
 	}
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
 }
 
-func (e *Extension[T]) indexIter(iter badgerutils.Iterator[*T]) error {
-	store := refstore.New(e.store)
-
-	for iter.Rewind(); iter.Valid(); iter.Next() {
-		k := iter.Key()
-		v, err := iter.Value()
-		if err != nil {
-			return err
-		}
-
-		kvs, err := e.indexer.Index(v, true)
-		if err != nil {
-			return err
-		}
-		for _, kv := range kvs {
-			err = store.Set(k, refstore.NewRefEntry(kv.Key).WithValue(kv.Value))
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (e *Extension[T]) setInitialized() error {
-	return e.store.Set(nil, nil)
+type ExtensionInstance[T any] struct {
+	ext   *Extension[T]
+	store *refstore.Instance
 }
 
 // OnDelete implements the extensible.Extension interface.
-func (e *Extension[T]) OnDelete(key []byte, value *T) error {
-	store := refstore.New(e.store)
-
-	kvs, err := e.indexer.Index(value, false)
+func (e *ExtensionInstance[T]) OnDelete(key []byte, value *T) error {
+	kvs, err := e.ext.indexer.Index(value, false)
 	if err != nil {
 		return err
 	}
 	for _, kv := range kvs {
-		err := store.Delete(kv.Key)
+		err := e.store.Delete(kv.Key)
 		if err != nil {
 			return err
 		}
@@ -108,28 +58,26 @@ func (e *Extension[T]) OnDelete(key []byte, value *T) error {
 }
 
 // OnSet implements the extensible.Extension interface.
-func (e *Extension[T]) OnSet(key []byte, old, new *T, opts ...any) error {
-	store := refstore.New(e.store)
-
+func (e *ExtensionInstance[T]) OnSet(key []byte, old, new *T, opts ...any) error {
 	if old != nil {
-		kvs, err := e.indexer.Index(old, false)
+		kvs, err := e.ext.indexer.Index(old, false)
 		if err != nil {
 			return err
 		}
 		for _, kv := range kvs {
-			err := store.Delete(kv.Key)
+			err := e.store.Delete(kv.Key)
 			if err != nil {
 				return err
 			}
 		}
 	}
 
-	kvs, err := e.indexer.Index(new, true)
+	kvs, err := e.ext.indexer.Index(new, true)
 	if err != nil {
 		return err
 	}
 	for _, kv := range kvs {
-		err := store.Set(key, refstore.NewRefEntry(kv.Key).WithValue(kv.Value))
+		err := e.store.Set(key, refstore.NewRefEntry(kv.Key).WithValue(kv.Value))
 		if err != nil {
 			return err
 		}
@@ -138,27 +86,22 @@ func (e *Extension[T]) OnSet(key []byte, old, new *T, opts ...any) error {
 	return nil
 }
 
-// Drop implements the extensible.Extension interface.
-func (e *Extension[T]) Drop() error {
-	return nil
-}
-
 // Lookup queries the index with the given arguments and returns an iterator of keys.
-func (e *Extension[T]) Lookup(opts badger.IteratorOptions, args ...any) (badgerutils.Iterator[[]byte], error) {
-	iter, err := e.indexer.Lookup(args...)
+func (e *ExtensionInstance[T]) Lookup(opts badger.IteratorOptions, args ...any) (badgerutils.Iterator[[]byte, []byte], error) {
+	iter, err := e.ext.indexer.Lookup(args...)
 	if err != nil {
 		return nil, err
 	}
 
-	return LookupPartitions(refstore.New(e.store), iter, opts), nil
+	return LookupPartitions(e.store, iter, opts), nil
 }
 
 // SupportedQueries returns the supported queries of the index.
-func (e *Extension[T]) SupportedQueries() []string {
-	return e.descriptor.SupportedQueries()
+func (e *ExtensionInstance[T]) SupportedQueries() []string {
+	return e.ext.descriptor.SupportedQueries()
 }
 
 // SupportedValues returns the supported values of the index.
-func (e *Extension[T]) SupportedValues() []string {
-	return e.descriptor.SupportedValues()
+func (e *ExtensionInstance[T]) SupportedValues() []string {
+	return e.ext.descriptor.SupportedValues()
 }

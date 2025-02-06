@@ -6,8 +6,8 @@ import (
 )
 
 // Count returns an aggregate iterator that counts the number of items in the base iterator.
-func Count[T any](it badgerutils.Iterator[T]) *AggregateIterator[T, uint] {
-	return Aggregate(it, func(count uint, _ T, _ *badger.Item) uint {
+func Count[K, V any](it badgerutils.Iterator[K, V]) *AggregateIterator[K, V, uint] {
+	return Aggregate(it, func(count uint, _ V, _ *badger.Item) uint {
 		return count + 1
 	})
 }

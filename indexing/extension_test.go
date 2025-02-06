@@ -44,7 +44,7 @@ func (i TestIndexer) Index(v *TestStruct, update bool) ([]badgerutils.RawKVPair,
 	}, nil
 }
 
-func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partition], error) {
+func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[[]byte, indexing.Partition], error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("no arguments")
 	}
@@ -70,12 +70,14 @@ func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[indexing.Partitio
 }
 
 func TestObjectStore(t *testing.T) {
-	txn := testutil.PrepareTxn(t, true)
+	ext := indexing.NewExtension(TestIndexer{})
+	store := extstore.New[TestStruct](nil, map[string]extstore.Extension[TestStruct]{
+		"test": ext,
+	})
 
-	store := extstore.New[TestStruct](txn)
-	idx := TestIndexer{}
-	ext := indexing.NewExtension(idx)
-	store.AddExtension("test", ext)
+	txn := testutil.PrepareTxn(t, true)
+	ins := store.Instantiate(txn)
+	extIns := ins.GetExtension("test").(*indexing.ExtensionInstance[TestStruct])
 
 	var (
 		keys    = [][]byte{{1}, {2}, {3}}
@@ -87,12 +89,12 @@ func TestObjectStore(t *testing.T) {
 	)
 
 	for i, key := range keys {
-		err := store.Set(key, objects[i])
+		err := ins.Set(key, objects[i])
 		require.NoError(t, err)
 	}
 
 	t.Run("Lookup_A", func(t *testing.T) {
-		it, err := ext.Lookup(badger.DefaultIteratorOptions, "A", nil)
+		it, err := extIns.Lookup(badger.DefaultIteratorOptions, "A", nil)
 		require.NoError(t, err)
 		defer it.Close()
 
@@ -103,7 +105,7 @@ func TestObjectStore(t *testing.T) {
 	})
 
 	t.Run("Lookup_B", func(t *testing.T) {
-		it, err := ext.Lookup(badger.DefaultIteratorOptions, "B", nil)
+		it, err := extIns.Lookup(badger.DefaultIteratorOptions, "B", nil)
 		require.NoError(t, err)
 		defer it.Close()
 

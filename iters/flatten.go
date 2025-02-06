@@ -6,18 +6,18 @@ import (
 )
 
 // FlattenIterator is an iterator that flattens a set of iterators into a single iterator.
-type FlattenIterator[T any] struct {
-	base    badgerutils.Iterator[badgerutils.Iterator[T]]
-	current badgerutils.Iterator[T]
+type FlattenIterator[K1, K2, V any] struct {
+	base    badgerutils.Iterator[K1, badgerutils.Iterator[K2, V]]
+	current badgerutils.Iterator[K2, V]
 }
 
 // Flatten creates a new flatten iterator.
-func Flatten[T any](base badgerutils.Iterator[badgerutils.Iterator[T]]) *FlattenIterator[T] {
-	return &FlattenIterator[T]{base: base}
+func Flatten[K1, K2, V any](base badgerutils.Iterator[K1, badgerutils.Iterator[K2, V]]) *FlattenIterator[K1, K2, V] {
+	return &FlattenIterator[K1, K2, V]{base: base}
 }
 
 // Close implements the Iterator interface.
-func (it *FlattenIterator[T]) Close() {
+func (it *FlattenIterator[K1, K2, V]) Close() {
 	if it.current != nil {
 		it.current.Close()
 	}
@@ -25,7 +25,7 @@ func (it *FlattenIterator[T]) Close() {
 }
 
 // Item implements the Iterator interface.
-func (it *FlattenIterator[T]) Item() *badger.Item {
+func (it *FlattenIterator[K1, K2, V]) Item() *badger.Item {
 	if it.current == nil || !it.current.Valid() {
 		return nil
 	}
@@ -34,7 +34,7 @@ func (it *FlattenIterator[T]) Item() *badger.Item {
 }
 
 // Next implements the Iterator interface.
-func (it *FlattenIterator[T]) Next() {
+func (it *FlattenIterator[K1, K2, V]) Next() {
 	if it.current != nil {
 		it.current.Next()
 		if it.current.Valid() {
@@ -46,7 +46,7 @@ func (it *FlattenIterator[T]) Next() {
 	it.nextCurrent()
 }
 
-func (it *FlattenIterator[T]) nextCurrent() {
+func (it *FlattenIterator[K1, K2, V]) nextCurrent() {
 	for {
 		if !it.base.Valid() {
 			break
@@ -72,33 +72,33 @@ func (it *FlattenIterator[T]) nextCurrent() {
 }
 
 // Rewind implements the Iterator interface.
-func (it *FlattenIterator[T]) Rewind() {
+func (it *FlattenIterator[K1, K2, V]) Rewind() {
 	it.base.Rewind()
 	it.nextCurrent()
 }
 
 // Seek implements the Iterator interface.
-func (it *FlattenIterator[T]) Seek(key []byte) {
+func (it *FlattenIterator[K1, K2, V]) Seek(key []byte) {
 	it.base.Seek(key)
 	it.nextCurrent()
 }
 
 // Valid implements the Iterator interface.
-func (it *FlattenIterator[T]) Valid() bool {
+func (it *FlattenIterator[K1, K2, V]) Valid() bool {
 	return it.base.Valid() || (it.current != nil && it.current.Valid())
 }
 
 // Key implements the Iterator interface.
-func (it *FlattenIterator[T]) Key() []byte {
+func (it *FlattenIterator[K1, K2, V]) Key() (key K2) {
 	if it.current != nil {
 		return it.current.Key()
 	}
 
-	return nil
+	return key
 }
 
 // Value returns the current value of the iterator.
-func (it *FlattenIterator[T]) Value() (value T, err error) {
+func (it *FlattenIterator[K1, K2, V]) Value() (value V, err error) {
 	if it.current != nil {
 		return it.current.Value()
 	}

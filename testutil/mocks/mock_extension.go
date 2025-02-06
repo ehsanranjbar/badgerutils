@@ -3,7 +3,10 @@
 package mocks
 
 import (
+	badger "github.com/dgraph-io/badger/v4"
 	badgerutils "github.com/ehsanranjbar/badgerutils"
+
+	ext "github.com/ehsanranjbar/badgerutils/store/ext"
 
 	mock "github.com/stretchr/testify/mock"
 )
@@ -21,67 +24,9 @@ func (_m *MockExtension[T]) EXPECT() *MockExtension_Expecter[T] {
 	return &MockExtension_Expecter[T]{mock: &_m.Mock}
 }
 
-// Drop provides a mock function with given fields:
-func (_m *MockExtension[T]) Drop() error {
-	ret := _m.Called()
-
-	if len(ret) == 0 {
-		panic("no return value specified for Drop")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func() error); ok {
-		r0 = rf()
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// MockExtension_Drop_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Drop'
-type MockExtension_Drop_Call[T any] struct {
-	*mock.Call
-}
-
-// Drop is a helper method to define mock.On call
-func (_e *MockExtension_Expecter[T]) Drop() *MockExtension_Drop_Call[T] {
-	return &MockExtension_Drop_Call[T]{Call: _e.mock.On("Drop")}
-}
-
-func (_c *MockExtension_Drop_Call[T]) Run(run func()) *MockExtension_Drop_Call[T] {
-	_c.Call.Run(func(args mock.Arguments) {
-		run()
-	})
-	return _c
-}
-
-func (_c *MockExtension_Drop_Call[T]) Return(_a0 error) *MockExtension_Drop_Call[T] {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockExtension_Drop_Call[T]) RunAndReturn(run func() error) *MockExtension_Drop_Call[T] {
-	_c.Call.Return(run)
-	return _c
-}
-
-// Init provides a mock function with given fields: store, iter
-func (_m *MockExtension[T]) Init(store badgerutils.BadgerStore, iter badgerutils.Iterator[*T]) error {
-	ret := _m.Called(store, iter)
-
-	if len(ret) == 0 {
-		panic("no return value specified for Init")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(badgerutils.BadgerStore, badgerutils.Iterator[*T]) error); ok {
-		r0 = rf(store, iter)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
+// Init provides a mock function with given fields: store
+func (_m *MockExtension[T]) Init(store badgerutils.Instantiator[badgerutils.BadgerStore]) {
+	_m.Called(store)
 }
 
 // MockExtension_Init_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Init'
@@ -90,131 +35,72 @@ type MockExtension_Init_Call[T any] struct {
 }
 
 // Init is a helper method to define mock.On call
-//   - store badgerutils.BadgerStore
-//   - iter badgerutils.Iterator[*T]
-func (_e *MockExtension_Expecter[T]) Init(store interface{}, iter interface{}) *MockExtension_Init_Call[T] {
-	return &MockExtension_Init_Call[T]{Call: _e.mock.On("Init", store, iter)}
+//   - store badgerutils.Instantiator[badgerutils.BadgerStore]
+func (_e *MockExtension_Expecter[T]) Init(store interface{}) *MockExtension_Init_Call[T] {
+	return &MockExtension_Init_Call[T]{Call: _e.mock.On("Init", store)}
 }
 
-func (_c *MockExtension_Init_Call[T]) Run(run func(store badgerutils.BadgerStore, iter badgerutils.Iterator[*T])) *MockExtension_Init_Call[T] {
+func (_c *MockExtension_Init_Call[T]) Run(run func(store badgerutils.Instantiator[badgerutils.BadgerStore])) *MockExtension_Init_Call[T] {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(badgerutils.BadgerStore), args[1].(badgerutils.Iterator[*T]))
+		run(args[0].(badgerutils.Instantiator[badgerutils.BadgerStore]))
 	})
 	return _c
 }
 
-func (_c *MockExtension_Init_Call[T]) Return(_a0 error) *MockExtension_Init_Call[T] {
-	_c.Call.Return(_a0)
+func (_c *MockExtension_Init_Call[T]) Return() *MockExtension_Init_Call[T] {
+	_c.Call.Return()
 	return _c
 }
 
-func (_c *MockExtension_Init_Call[T]) RunAndReturn(run func(badgerutils.BadgerStore, badgerutils.Iterator[*T]) error) *MockExtension_Init_Call[T] {
+func (_c *MockExtension_Init_Call[T]) RunAndReturn(run func(badgerutils.Instantiator[badgerutils.BadgerStore])) *MockExtension_Init_Call[T] {
 	_c.Call.Return(run)
 	return _c
 }
 
-// OnDelete provides a mock function with given fields: key, value
-func (_m *MockExtension[T]) OnDelete(key []byte, value *T) error {
-	ret := _m.Called(key, value)
+// Instantiate provides a mock function with given fields: txn
+func (_m *MockExtension[T]) Instantiate(txn *badger.Txn) ext.ExtensionInstance[T] {
+	ret := _m.Called(txn)
 
 	if len(ret) == 0 {
-		panic("no return value specified for OnDelete")
+		panic("no return value specified for Instantiate")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func([]byte, *T) error); ok {
-		r0 = rf(key, value)
+	var r0 ext.ExtensionInstance[T]
+	if rf, ok := ret.Get(0).(func(*badger.Txn) ext.ExtensionInstance[T]); ok {
+		r0 = rf(txn)
 	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// MockExtension_OnDelete_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'OnDelete'
-type MockExtension_OnDelete_Call[T any] struct {
-	*mock.Call
-}
-
-// OnDelete is a helper method to define mock.On call
-//   - key []byte
-//   - value *T
-func (_e *MockExtension_Expecter[T]) OnDelete(key interface{}, value interface{}) *MockExtension_OnDelete_Call[T] {
-	return &MockExtension_OnDelete_Call[T]{Call: _e.mock.On("OnDelete", key, value)}
-}
-
-func (_c *MockExtension_OnDelete_Call[T]) Run(run func(key []byte, value *T)) *MockExtension_OnDelete_Call[T] {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].([]byte), args[1].(*T))
-	})
-	return _c
-}
-
-func (_c *MockExtension_OnDelete_Call[T]) Return(_a0 error) *MockExtension_OnDelete_Call[T] {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *MockExtension_OnDelete_Call[T]) RunAndReturn(run func([]byte, *T) error) *MockExtension_OnDelete_Call[T] {
-	_c.Call.Return(run)
-	return _c
-}
-
-// OnSet provides a mock function with given fields: key, old, new, opts
-func (_m *MockExtension[T]) OnSet(key []byte, old *T, new *T, opts ...any) error {
-	var _ca []interface{}
-	_ca = append(_ca, key, old, new)
-	_ca = append(_ca, opts...)
-	ret := _m.Called(_ca...)
-
-	if len(ret) == 0 {
-		panic("no return value specified for OnSet")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func([]byte, *T, *T, ...any) error); ok {
-		r0 = rf(key, old, new, opts...)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// MockExtension_OnSet_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'OnSet'
-type MockExtension_OnSet_Call[T any] struct {
-	*mock.Call
-}
-
-// OnSet is a helper method to define mock.On call
-//   - key []byte
-//   - old *T
-//   - new *T
-//   - opts ...any
-func (_e *MockExtension_Expecter[T]) OnSet(key interface{}, old interface{}, new interface{}, opts ...interface{}) *MockExtension_OnSet_Call[T] {
-	return &MockExtension_OnSet_Call[T]{Call: _e.mock.On("OnSet",
-		append([]interface{}{key, old, new}, opts...)...)}
-}
-
-func (_c *MockExtension_OnSet_Call[T]) Run(run func(key []byte, old *T, new *T, opts ...any)) *MockExtension_OnSet_Call[T] {
-	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]any, len(args)-3)
-		for i, a := range args[3:] {
-			if a != nil {
-				variadicArgs[i] = a.(any)
-			}
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(ext.ExtensionInstance[T])
 		}
-		run(args[0].([]byte), args[1].(*T), args[2].(*T), variadicArgs...)
+	}
+
+	return r0
+}
+
+// MockExtension_Instantiate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Instantiate'
+type MockExtension_Instantiate_Call[T any] struct {
+	*mock.Call
+}
+
+// Instantiate is a helper method to define mock.On call
+//   - txn *badger.Txn
+func (_e *MockExtension_Expecter[T]) Instantiate(txn interface{}) *MockExtension_Instantiate_Call[T] {
+	return &MockExtension_Instantiate_Call[T]{Call: _e.mock.On("Instantiate", txn)}
+}
+
+func (_c *MockExtension_Instantiate_Call[T]) Run(run func(txn *badger.Txn)) *MockExtension_Instantiate_Call[T] {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*badger.Txn))
 	})
 	return _c
 }
 
-func (_c *MockExtension_OnSet_Call[T]) Return(_a0 error) *MockExtension_OnSet_Call[T] {
+func (_c *MockExtension_Instantiate_Call[T]) Return(_a0 ext.ExtensionInstance[T]) *MockExtension_Instantiate_Call[T] {
 	_c.Call.Return(_a0)
 	return _c
 }
 
-func (_c *MockExtension_OnSet_Call[T]) RunAndReturn(run func([]byte, *T, *T, ...any) error) *MockExtension_OnSet_Call[T] {
+func (_c *MockExtension_Instantiate_Call[T]) RunAndReturn(run func(*badger.Txn) ext.ExtensionInstance[T]) *MockExtension_Instantiate_Call[T] {
 	_c.Call.Return(run)
 	return _c
 }

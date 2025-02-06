@@ -60,7 +60,7 @@ func (i *ValueInjector[T]) Index(v *T, set bool) ([]badgerutils.RawKVPair, error
 }
 
 // Lookup implements the Indexer interface.
-func (i *ValueInjector[T]) Lookup(args ...any) (badgerutils.Iterator[Partition], error) {
+func (i *ValueInjector[T]) Lookup(args ...any) (badgerutils.Iterator[[]byte, Partition], error) {
 	return i.indexer.Lookup(args...)
 }
 

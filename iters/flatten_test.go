@@ -17,17 +17,19 @@ import (
 func TestFlatten(t *testing.T) {
 	txn := testutil.PrepareTxn(t, true)
 
-	var its []badgerutils.Iterator[*StructA]
+	var its []badgerutils.Iterator[[]byte, *StructA]
 	for i := 0; i < 3; i++ {
-		store := sstore.New[StructA](pstore.New(txn, []byte{byte(i)}))
+		store := sstore.New[StructA](pstore.New(nil, []byte{byte(i)}))
+		ins := store.Instantiate(txn)
 
 		for j := 0; j < 3; j++ {
-			err := store.Set([]byte{byte(j)}, &StructA{A: i*3 + j})
+			err := ins.Set([]byte{byte(j)}, &StructA{A: i*3 + j})
 			require.NoError(t, err)
-
 		}
 
-		its = append(its, sstore.NewIterator[StructA](store.NewIterator(badger.DefaultIteratorOptions)))
+		it := ins.NewIterator(badger.DefaultIteratorOptions)
+		defer it.Close()
+		its = append(its, it)
 	}
 
 	flatten := iters.Flatten(iters.Slice(its))

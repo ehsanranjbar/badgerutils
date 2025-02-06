@@ -6,7 +6,7 @@ import (
 )
 
 // First returns the first value of the iterator.
-func First[T any](iter badgerutils.Iterator[T]) (value T, err error) {
+func First[K, V any](iter badgerutils.Iterator[K, V]) (value V, err error) {
 	iter.Rewind()
 	if !iter.Valid() {
 		return value, badger.ErrKeyNotFound

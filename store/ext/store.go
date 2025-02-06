@@ -16,47 +16,104 @@ var (
 	extStorePrefix  = []byte("ext")
 )
 
-// Store is a store that stores objects.
-type Store[T encoding.BinaryMarshaler,
+type Store[
+	T encoding.BinaryMarshaler,
 	PT sstore.PointerBinaryUnmarshaler[T],
 ] struct {
-	base badgerutils.BadgerStore
-	exts map[string]Extension[T]
+	dataStore *sstore.Store[T, PT]
+	extStore  *pstore.Store
+	exts      map[string]Extension[T]
+	prefix    []byte
 }
 
 // New creates a new Store.
-func New[T encoding.BinaryMarshaler,
+func New[
+	T encoding.BinaryMarshaler,
 	PT sstore.PointerBinaryUnmarshaler[T],
 ](
-	base badgerutils.BadgerStore,
+	base badgerutils.Instantiator[badgerutils.BadgerStore],
+	exts map[string]Extension[T],
 ) *Store[T, PT] {
+	if exts == nil {
+		exts = make(map[string]Extension[T])
+	}
+
+	var prefix []byte
+	if pfx, ok := base.(prefixed); ok {
+		prefix = pfx.Prefix()
+	}
+
+	extStore := pstore.New(base, extStorePrefix)
+	for name, ext := range exts {
+		ext.Init(pstore.New(extStore, []byte(name)))
+	}
+
 	return &Store[T, PT]{
-		base: base,
-		exts: make(map[string]Extension[T]),
+		dataStore: sstore.New[T, PT](pstore.New(base, dataStorePrefix)),
+		extStore:  extStore,
+		exts:      exts,
+		prefix:    prefix,
 	}
-}
-
-// Prefix returns the prefix of the store.
-func (s *Store[T, PT]) Prefix() []byte {
-	if pfx, ok := s.base.(prefixed); ok {
-		return pfx.Prefix()
-	}
-
-	return nil
 }
 
 type prefixed interface {
 	Prefix() []byte
 }
 
+// Instantiate creates a new Instance.
+func (s *Store[T, PT]) Instantiate(txn *badger.Txn) *Instance[T, PT] {
+	return &Instance[T, PT]{
+		dataStore: s.dataStore.Instantiate(txn),
+		exts:      s.instantiateExts(txn),
+		prefix:    s.prefix,
+	}
+}
+
+func (s *Store[T, PT]) instantiateExts(txn *badger.Txn) map[string]ExtensionInstance[T] {
+	exts := make(map[string]ExtensionInstance[T])
+	for name, ext := range s.exts {
+		exts[name] = ext.Instantiate(txn)
+	}
+
+	return exts
+}
+
+// GetExtension returns an extension by name.
+func (s *Store[T, PT]) GetExtension(name string) Extension[T] {
+	if ext, ok := s.exts[name]; ok {
+		return ext
+	}
+
+	return nil
+}
+
+func (s *Store[T, PT]) Prefix() []byte {
+	return s.prefix
+}
+
+// Instance is a store that stores objects.
+type Instance[
+	T encoding.BinaryMarshaler,
+	PT sstore.PointerBinaryUnmarshaler[T],
+] struct {
+	dataStore badgerutils.StoreInstance[[]byte, *T, *T, badgerutils.Iterator[[]byte, *T]]
+	exts      map[string]ExtensionInstance[T]
+	prefix    []byte
+}
+
+// Prefix returns the prefix of the store.
+func (s *Instance[T, PT]) Prefix() []byte {
+	return s.prefix
+}
+
 // Delete deletes an object along with all it's auxiliary references (i.e. secondary indexes).
-func (s *Store[T, PT]) Delete(key []byte) error {
+func (s *Instance[T, PT]) Delete(key []byte) error {
 	err := s.onDelete(key)
 	if err != nil {
 		return err
 	}
 
-	err = s.getDataStore().Delete(key)
+	err = s.dataStore.Delete(key)
 	if err != nil {
 		return fmt.Errorf("failed to delete object's data: %w", err)
 	}
@@ -64,12 +121,12 @@ func (s *Store[T, PT]) Delete(key []byte) error {
 	return nil
 }
 
-func (s *Store[T, PT]) onDelete(key []byte) error {
+func (s *Instance[T, PT]) onDelete(key []byte) error {
 	if len(s.exts) == 0 {
 		return nil
 	}
 
-	data, err := s.getDataStore().Get(key)
+	data, err := s.dataStore.Get(key)
 	if err != nil {
 		return err
 	}
@@ -84,38 +141,29 @@ func (s *Store[T, PT]) onDelete(key []byte) error {
 	return nil
 }
 
-func (s *Store[T, PT]) getDataStore() *sstore.Store[T, PT] {
-	return sstore.New[T, PT](pstore.New(s.base, dataStorePrefix))
-}
-
-func (s *Store[T, PT]) getExtensionStore(name string) *pstore.Store {
-	return pstore.New(s.base, append(extStorePrefix, []byte(name)...))
-}
-
 // Get gets an object given it's key.
-func (s *Store[T, PT]) Get(key []byte) (*T, error) {
-	return s.getDataStore().Get(key)
+func (s *Instance[T, PT]) Get(key []byte) (*T, error) {
+	return s.dataStore.Get(key)
 }
 
 // NewIterator creates a new iterator over the objects.
-func (s *Store[T, PT]) NewIterator(opts badger.IteratorOptions) badgerutils.Iterator[*T] {
-	return s.getDataStore().NewIterator(opts)
+func (s *Instance[T, PT]) NewIterator(opts badger.IteratorOptions) badgerutils.Iterator[[]byte, *T] {
+	return s.dataStore.NewIterator(opts)
 }
 
 // Set inserts the object into the store as a new object or updates an existing object
-func (s *Store[T, PT]) Set(key []byte, obj *T) error {
+func (s *Instance[T, PT]) Set(key []byte, obj *T) error {
 	return s.SetWithOptions(key, obj)
 }
 
 // SetWithOptions inserts the object into the store as a new object or updates an existing object
-func (s *Store[T, PT]) SetWithOptions(key []byte, obj *T, opts ...any) error {
-	dstore := s.getDataStore()
-	old, err := dstore.Get(key)
+func (s *Instance[T, PT]) SetWithOptions(key []byte, obj *T, opts ...any) error {
+	old, err := s.dataStore.Get(key)
 	if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
 		return fmt.Errorf("failed to get object's data: %w", err)
 	}
 
-	err = s.getDataStore().Set(key, obj)
+	err = s.dataStore.Set(key, obj)
 	if err != nil {
 		return fmt.Errorf("failed to set object's data: %w", err)
 	}
@@ -128,7 +176,7 @@ func (s *Store[T, PT]) SetWithOptions(key []byte, obj *T, opts ...any) error {
 	return nil
 }
 
-func (s *Store[T, PT]) onSet(key []byte, old, new *T, opts ...any) error {
+func (s *Instance[T, PT]) onSet(key []byte, old, new *T, opts ...any) error {
 	if len(s.exts) == 0 {
 		return nil
 	}
@@ -148,7 +196,7 @@ func filterOptions(name string, opts []any) []any {
 	var extOpts []any
 
 	for _, opt := range opts {
-		if so, ok := opt.(SpecificOption); ok {
+		if so, ok := opt.(ExtOption); ok {
 			if so.extName == name {
 				extOpts = append(extOpts, so.value)
 			} else {
@@ -162,44 +210,64 @@ func filterOptions(name string, opts []any) []any {
 	return extOpts
 }
 
-// AddExtension adds an extension and feed it all the existing objects.
-func (s *Store[T, PT]) AddExtension(name string, ext Extension[T]) error {
-	if name == "" {
-		return errors.New("extension name cannot be empty")
-	}
-	if s.exts == nil {
-		s.exts = make(map[string]Extension[T])
-	}
-	if _, ok := s.exts[name]; ok {
-		return fmt.Errorf("an extension already registered with name %s", name)
+// GetExtension returns an extension's instance by name.
+func (s *Instance[T, PT]) GetExtension(name string) ExtensionInstance[T] {
+	if ext, ok := s.exts[name]; ok {
+		return ext
 	}
 
-	store := s.getExtensionStore(name)
-	iter := s.getDataStore().NewIterator(badger.IteratorOptions{})
-	defer iter.Close()
-	err := ext.Init(store, iter)
-	if err != nil {
-		return fmt.Errorf("failed to initialize extension %s: %w", name, err)
-	}
-
-	s.exts[name] = ext
 	return nil
 }
 
+// ManagerInstance is an instance of the store that can manage extensions which typically is used in migrations.
+type ManagerInstance[T encoding.BinaryMarshaler, PT sstore.PointerBinaryUnmarshaler[T]] struct {
+	*Instance[T, PT]
+	store *Store[T, PT]
+	txn   *badger.Txn
+}
+
+// AddExtension adds an extension and feed it all the existing objects.
+func (s *ManagerInstance[T, PT]) AddExtension(name string, ext Extension[T]) error {
+	if name == "" {
+		return errors.New("extension name cannot be empty")
+	}
+	if _, ok := s.store.exts[name]; ok {
+		return fmt.Errorf("an extension already registered with name %s", name)
+	}
+
+	es := pstore.New(s.store.extStore, []byte(name))
+	ext.Init(es)
+
+	iter := s.dataStore.NewIterator(badger.IteratorOptions{})
+	defer iter.Close()
+	extIns := ext.Instantiate(s.txn)
+	for iter.Rewind(); iter.Valid(); iter.Next() {
+		v, err := iter.Value()
+		if err != nil {
+			return fmt.Errorf("failed to initialize extension %s: %w", name, err)
+		}
+		err = extIns.OnSet(iter.Key(), nil, v, InitializationFlag{})
+		if err != nil {
+			return fmt.Errorf("failed to initialize extension %s: %w", name, err)
+		}
+	}
+
+	s.store.exts[name] = ext
+	return nil
+}
+
+// InitializationFlag is a flag that is passed to extensions to indicate that the extension is being initialized.
+type InitializationFlag struct{}
+
 // DropExtension drops an extension.
-func (s *Store[T, PT]) DropExtension(name string) error {
-	ext, ok := s.exts[name]
+func (s *ManagerInstance[T, PT]) DropExtension(name string) error {
+	_, ok := s.store.exts[name]
 	if !ok {
 		return fmt.Errorf("extension %s not found", name)
 	}
 
-	err := ext.Drop()
-	if err != nil {
-		return fmt.Errorf("failed to drop extension %s: %w", name, err)
-	}
-
-	store := s.getExtensionStore(name)
-	err = dropStore(store)
+	es := pstore.New(s.store.extStore, []byte(name)).Instantiate(s.txn)
+	err := dropStore(es)
 	if err != nil {
 		return fmt.Errorf("failed to purge extension %s sub store: %w", name, err)
 	}
@@ -208,7 +276,7 @@ func (s *Store[T, PT]) DropExtension(name string) error {
 	return nil
 }
 
-func dropStore(store *pstore.Store) error {
+func dropStore(store badgerutils.BadgerStore) error {
 	iter := pstore.NewIteratorFromStore(store)
 	defer iter.Close()
 
@@ -223,7 +291,7 @@ func dropStore(store *pstore.Store) error {
 }
 
 // DropAllExtensions drops all extensions.
-func (s *Store[T, PT]) DropAllExtensions() error {
+func (s *ManagerInstance[T, PT]) DropAllExtensions() error {
 	for name := range s.exts {
 		err := s.DropExtension(name)
 		if err != nil {
@@ -232,4 +300,14 @@ func (s *Store[T, PT]) DropAllExtensions() error {
 	}
 
 	return nil
+}
+
+// ListExtensions lists all extensions.
+func (s *ManagerInstance[T, PT]) ListExtensions() []string {
+	var names []string
+	for name := range s.exts {
+		names = append(names, name)
+	}
+
+	return names
 }

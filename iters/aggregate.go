@@ -7,34 +7,34 @@ import (
 
 // AggregateIterator is an iterator that aggregates the values of base iterator as it iterates without
 // interfering with the base iterator.
-type AggregateIterator[T, S any] struct {
-	base  badgerutils.Iterator[T]
+type AggregateIterator[K, V, S any] struct {
+	base  badgerutils.Iterator[K, V]
 	state S
-	f     func(S, T, *badger.Item) S
+	f     func(S, V, *badger.Item) S
 }
 
 // Aggregate creates a new aggregate iterator.
-func Aggregate[T any, S any](base badgerutils.Iterator[T], f func(S, T, *badger.Item) S) *AggregateIterator[T, S] {
-	return &AggregateIterator[T, S]{base: base, f: f}
+func Aggregate[K, V, S any](base badgerutils.Iterator[K, V], f func(S, V, *badger.Item) S) *AggregateIterator[K, V, S] {
+	return &AggregateIterator[K, V, S]{base: base, f: f}
 }
 
 // Close implements the Iterator interface.
-func (it *AggregateIterator[T, S]) Close() {
+func (it *AggregateIterator[K, V, S]) Close() {
 	it.base.Close()
 }
 
 // Item implements the Iterator interface.
-func (it *AggregateIterator[T, S]) Item() *badger.Item {
+func (it *AggregateIterator[K, V, S]) Item() *badger.Item {
 	return it.base.Item()
 }
 
 // Next implements the Iterator interface.
-func (it *AggregateIterator[T, S]) Next() {
+func (it *AggregateIterator[K, V, S]) Next() {
 	it.base.Next()
 	it.update()
 }
 
-func (it *AggregateIterator[T, S]) update() {
+func (it *AggregateIterator[K, V, S]) update() {
 	if !it.base.Valid() {
 		return
 	}
@@ -47,7 +47,7 @@ func (it *AggregateIterator[T, S]) update() {
 }
 
 // Rewind implements the Iterator interface.
-func (it *AggregateIterator[T, S]) Rewind() {
+func (it *AggregateIterator[K, V, S]) Rewind() {
 	it.base.Rewind()
 	var s S
 	it.state = s
@@ -55,7 +55,7 @@ func (it *AggregateIterator[T, S]) Rewind() {
 }
 
 // Seek implements the Iterator interface.
-func (it *AggregateIterator[T, S]) Seek(key []byte) {
+func (it *AggregateIterator[K, V, S]) Seek(key []byte) {
 	it.base.Seek(key)
 	var s S
 	it.state = s
@@ -63,20 +63,20 @@ func (it *AggregateIterator[T, S]) Seek(key []byte) {
 }
 
 // Valid implements the Iterator interface.
-func (it *AggregateIterator[T, S]) Valid() bool {
+func (it *AggregateIterator[K, V, S]) Valid() bool {
 	return it.base.Valid()
 }
 
-func (it *AggregateIterator[T, S]) Key() []byte {
+func (it *AggregateIterator[K, V, S]) Key() K {
 	return it.base.Key()
 }
 
 // Value implements the Iterator interface.
-func (it *AggregateIterator[T, S]) Value() (value T, err error) {
+func (it *AggregateIterator[K, V, S]) Value() (value V, err error) {
 	return it.base.Value()
 }
 
 // Result returns the aggregated result.
-func (it *AggregateIterator[T, S]) Result() S {
+func (it *AggregateIterator[K, V, S]) Result() S {
 	return it.state
 }

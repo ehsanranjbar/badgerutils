@@ -34,10 +34,12 @@ func (f *FailStruct) UnmarshalBinary(data []byte) error {
 }
 
 func TestStore(t *testing.T) {
-	txn := testutil.PrepareTxn(t, true)
+	store := serialized.New[TestStruct](nil)
+	failStore := serialized.New[FailStruct](nil)
 
-	store := serialized.New[TestStruct](txn)
-	failStore := serialized.New[FailStruct](txn)
+	txn := testutil.PrepareTxn(t, true)
+	ins := store.Instantiate(txn)
+	failIns := failStore.Instantiate(txn)
 
 	var (
 		key   = []byte("foo")
@@ -45,41 +47,34 @@ func TestStore(t *testing.T) {
 	)
 
 	t.Run("NotFound", func(t *testing.T) {
-		v, err := store.Get(key)
+		v, err := ins.Get(key)
 		require.Error(t, err)
 		require.Nil(t, v)
 	})
 
 	t.Run("Set", func(t *testing.T) {
-		err := store.Set(key, value)
+		err := ins.Set(key, value)
 		require.NoError(t, err)
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		actual, err := store.Get(key)
+		actual, err := ins.Get(key)
 		require.NoError(t, err)
 		require.Equal(t, value, actual)
-	})
-
-	t.Run("GetWithItem", func(t *testing.T) {
-		item, actual, err := store.GetWithItem(key)
-		require.NoError(t, err)
-		require.NotNil(t, item)
-		require.Equal(t, value, actual)
-	})
-
-	t.Run("MarshalFail", func(t *testing.T) {
-		_, err := failStore.Get(key)
-		require.Error(t, err)
 	})
 
 	t.Run("UnmarshalFail", func(t *testing.T) {
-		err := failStore.Set(key, &FailStruct{})
+		_, err := failIns.Get(key)
+		require.Error(t, err)
+	})
+
+	t.Run("MarshalFail", func(t *testing.T) {
+		err := failIns.Set(key, &FailStruct{})
 		require.Error(t, err)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		err := store.Delete(key)
+		err := ins.Delete(key)
 		require.NoError(t, err)
 	})
 }

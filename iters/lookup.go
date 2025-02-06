@@ -7,10 +7,10 @@ import (
 
 // Lookup creates a new lookup iterator that will retrieve references from an Iterator[*Ref]
 // and return the actual values given a Store[*T].
-func Lookup[K, V any](
+func Lookup[IK, K, V any](
 	store Getter[K, V],
-	iter badgerutils.Iterator[K],
-) *MapIterator[K, *V] {
+	iter badgerutils.Iterator[IK, K],
+) *MapIterator[IK, K, *V] {
 	return Map(iter, func(k K, _ *badger.Item) (*V, error) {
 		return store.Get(k)
 	})

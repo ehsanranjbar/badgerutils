@@ -37,9 +37,10 @@ func (t *StructB) UnmarshalBinary(data []byte) error {
 }
 
 func TestMap(t *testing.T) {
-	txn := testutil.PrepareTxn(t, true)
+	store := sstore.New[StructA](nil)
 
-	store := sstore.New[StructA](txn)
+	txn := testutil.PrepareTxn(t, true)
+	ins := store.Instantiate(txn)
 
 	var (
 		keys   = [][]byte{[]byte("foo1"), []byte("foo2")}
@@ -47,11 +48,11 @@ func TestMap(t *testing.T) {
 	)
 
 	for i, key := range keys {
-		err := store.Set(key, values[i])
+		err := ins.Set(key, values[i])
 		require.NoError(t, err)
 	}
 
-	iter := iters.Map(store.NewIterator(badger.DefaultIteratorOptions), func(v *StructA, _ *badger.Item) (StructB, error) {
+	iter := iters.Map(ins.NewIterator(badger.DefaultIteratorOptions), func(v *StructA, _ *badger.Item) (StructB, error) {
 		return StructB{B: strconv.Itoa(v.A)}, nil
 	})
 	defer iter.Close()

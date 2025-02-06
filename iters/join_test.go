@@ -12,10 +12,12 @@ import (
 )
 
 func TestJoin(t *testing.T) {
-	txn := testutil.PrepareTxn(t, true)
+	aStore := sstore.New[StructA](pstore.New(nil, []byte("a")))
+	bStore := sstore.New[StructB](pstore.New(nil, []byte("b")))
 
-	aStore := sstore.New[StructA](pstore.New(txn, []byte("a")))
-	bStore := sstore.New[StructB](pstore.New(txn, []byte("b")))
+	txn := testutil.PrepareTxn(t, true)
+	aIns := aStore.Instantiate(txn)
+	bIns := bStore.Instantiate(txn)
 
 	var (
 		aKeys   = [][]byte{[]byte("foo1"), []byte("foo2")}
@@ -25,17 +27,17 @@ func TestJoin(t *testing.T) {
 	)
 
 	for i, key := range aKeys {
-		err := aStore.Set(key, aValues[i])
+		err := aIns.Set(key, aValues[i])
 		require.NoError(t, err)
 	}
 	for i, key := range bKeys {
-		err := bStore.Set(key, bValues[i])
+		err := bIns.Set(key, bValues[i])
 		require.NoError(t, err)
 	}
 
 	iter := iters.Join(
-		aStore.NewIterator(badger.DefaultIteratorOptions),
-		bStore.NewIterator(badger.DefaultIteratorOptions),
+		aIns.NewIterator(badger.DefaultIteratorOptions),
+		bIns.NewIterator(badger.DefaultIteratorOptions),
 		iters.UnionJoinFunc[*StructA, *StructB],
 	)
 	defer iter.Close()
