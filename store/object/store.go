@@ -32,7 +32,7 @@ type Object[
 type Store[
 	I any,
 	D encoding.BinaryMarshaler,
-	PD sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinarySerializable[D],
 ] struct {
 	dataStore     *extstore.Store[D, PD]
 	idFunc        func(*D) (I, error)
@@ -47,7 +47,7 @@ type Store[
 func New[
 	I any,
 	D encoding.BinaryMarshaler,
-	PD sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinarySerializable[D],
 ](
 	base badgerutils.Instantiator[badgerutils.BadgerStore],
 	opts ...func(*Store[I, D, PD]),
@@ -90,7 +90,7 @@ func New[
 func WithIdFunc[
 	I any,
 	D encoding.BinaryMarshaler,
-	PD sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinarySerializable[D],
 ](
 	f func(*D) (I, error),
 ) func(*Store[I, D, PD]) {
@@ -103,7 +103,7 @@ func WithIdFunc[
 func WithIdCodec[
 	I any,
 	D encoding.BinaryMarshaler,
-	PD sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinarySerializable[D],
 ](
 	c codec.Codec[I],
 ) func(*Store[I, D, PD]) {
@@ -116,7 +116,7 @@ func WithIdCodec[
 func WithMetadataFunc[
 	I any,
 	D encoding.BinaryMarshaler,
-	PD sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinarySerializable[D],
 ](
 	f func(_ []byte, _ *D, _ D, oldU, newU *extutil.Metadata) (*extutil.Metadata, error),
 ) func(*Store[I, D, PD]) {
@@ -129,7 +129,7 @@ func WithMetadataFunc[
 func WithIndexer[
 	I any,
 	D encoding.BinaryMarshaler,
-	PD sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinarySerializable[D],
 ](
 	name string,
 	idx indexing.Indexer[D],
@@ -147,7 +147,7 @@ func WithIndexer[
 func WithExtractor[
 	I any,
 	D encoding.BinaryMarshaler,
-	PD sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinarySerializable[D],
 ](
 	e schema.PathExtractor[D],
 ) func(*Store[I, D, PD]) {
@@ -160,7 +160,7 @@ func WithExtractor[
 func WithFlatExtractor[
 	I any,
 	D encoding.BinaryMarshaler,
-	PD sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinarySerializable[D],
 ](
 	e schema.PathExtractor[[]byte],
 ) func(*Store[I, D, PD]) {
@@ -199,7 +199,7 @@ func (s *Store[I, D, PD]) Indexer(name string) *indexing.Extension[D] {
 type Instance[
 	I any,
 	D encoding.BinaryMarshaler,
-	PD sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinarySerializable[D],
 ] struct {
 	dataStore *extstore.Instance[D, PD]
 	idFunc    func(*D) (I, error)
@@ -282,7 +282,7 @@ func (s *Instance[I, D, PD]) Set(d D, opts ...func(*Object[I, D])) error {
 func WithId[
 	I any,
 	D encoding.BinaryMarshaler,
-	PD sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinarySerializable[D],
 ](
 	id I,
 ) func(*Object[I, D]) {
@@ -295,7 +295,7 @@ func WithId[
 func WithMetadata[
 	I any,
 	D encoding.BinaryMarshaler,
-	PD sstore.PointerBinaryUnmarshaler[D],
+	PD sstore.PointerBinarySerializable[D],
 ](
 	m map[string]any,
 ) func(*Object[I, D]) {

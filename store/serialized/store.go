@@ -8,21 +8,22 @@ import (
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 )
 
-// PointerBinaryUnmarshaler is an interface that unmarshals a binary data.
-type PointerBinaryUnmarshaler[T any] interface {
-	encoding.BinaryUnmarshaler
+// PointerBinarySerializable is an interface to pointer of T that is binary serializable/deserializable.
+type PointerBinarySerializable[T any] interface {
 	*T
+	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
 }
 
-type Store[T encoding.BinaryMarshaler, PT PointerBinaryUnmarshaler[T]] struct {
+type Store[T any, PT PointerBinarySerializable[T]] struct {
 	base   badgerutils.Instantiator[badgerutils.BadgerStore]
 	prefix []byte
 }
 
 // New creates a new Store.
 func New[
-	T encoding.BinaryMarshaler,
-	PT PointerBinaryUnmarshaler[T],
+	T any,
+	PT PointerBinarySerializable[T],
 ](base badgerutils.Instantiator[badgerutils.BadgerStore]) *Store[T, PT] {
 	var prefix []byte
 	if pfx, ok := base.(prefixed); ok {
@@ -58,7 +59,7 @@ func (s *Store[T, PT]) Instantiate(txn *badger.Txn) badgerutils.StoreInstance[[]
 }
 
 // Instance is a store that serializes all keys and values.
-type Instance[T encoding.BinaryMarshaler, PT PointerBinaryUnmarshaler[T]] struct {
+type Instance[T any, PT PointerBinarySerializable[T]] struct {
 	base   badgerutils.BadgerStore
 	prefix []byte
 }
@@ -109,7 +110,7 @@ func (s *Instance[T, PT]) Set(key []byte, value *T) error {
 		err  error
 	)
 	if value != nil {
-		data, err = (*value).MarshalBinary()
+		data, err = PT(value).MarshalBinary()
 		if err != nil {
 			return err
 		}

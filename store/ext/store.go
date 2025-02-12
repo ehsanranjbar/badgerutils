@@ -1,7 +1,6 @@
 package ext
 
 import (
-	"encoding"
 	"errors"
 	"fmt"
 
@@ -17,8 +16,8 @@ var (
 )
 
 type Store[
-	T encoding.BinaryMarshaler,
-	PT sstore.PointerBinaryUnmarshaler[T],
+	T any,
+	PT sstore.PointerBinarySerializable[T],
 ] struct {
 	dataStore *sstore.Store[T, PT]
 	extStore  *pstore.Store
@@ -28,8 +27,8 @@ type Store[
 
 // New creates a new Store.
 func New[
-	T encoding.BinaryMarshaler,
-	PT sstore.PointerBinaryUnmarshaler[T],
+	T any,
+	PT sstore.PointerBinarySerializable[T],
 ](
 	base badgerutils.Instantiator[badgerutils.BadgerStore],
 	exts map[string]Extension[T],
@@ -93,8 +92,8 @@ func (s *Store[T, PT]) Prefix() []byte {
 
 // Instance is a store that stores objects.
 type Instance[
-	T encoding.BinaryMarshaler,
-	PT sstore.PointerBinaryUnmarshaler[T],
+	T any,
+	PT sstore.PointerBinarySerializable[T],
 ] struct {
 	dataStore badgerutils.StoreInstance[[]byte, *T, *T, badgerutils.Iterator[[]byte, *T]]
 	exts      map[string]ExtensionInstance[T]
@@ -220,7 +219,7 @@ func (s *Instance[T, PT]) GetExtension(name string) ExtensionInstance[T] {
 }
 
 // ManagerInstance is an instance of the store that can manage extensions which typically is used in migrations.
-type ManagerInstance[T encoding.BinaryMarshaler, PT sstore.PointerBinaryUnmarshaler[T]] struct {
+type ManagerInstance[T any, PT sstore.PointerBinarySerializable[T]] struct {
 	*Instance[T, PT]
 	store *Store[T, PT]
 	txn   *badger.Txn
