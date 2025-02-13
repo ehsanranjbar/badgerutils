@@ -6,7 +6,7 @@ import (
 )
 
 // Iterator is an iterator that unmarshal the value.
-type Iterator[T any, PT PointerBinarySerializable[T]] struct {
+type Iterator[T any, PT PBS[T]] struct {
 	base        badgerutils.BadgerIterator
 	keyProvider keyProvider
 	cachedValue *T
@@ -17,7 +17,7 @@ type keyProvider interface {
 }
 
 // NewIterator creates a new serialized iterator.
-func NewIterator[T any, PT PointerBinarySerializable[T]](base badgerutils.BadgerIterator) *Iterator[T, PT] {
+func NewIterator[T any, PT PBS[T]](base badgerutils.BadgerIterator) *Iterator[T, PT] {
 	kp, _ := base.(keyProvider)
 
 	return &Iterator[T, PT]{

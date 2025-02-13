@@ -20,7 +20,7 @@ var (
 type AssociateStore[
 	T any,
 	U encoding.BinaryMarshaler,
-	PU sstore.PointerBinarySerializable[U],
+	PU sstore.PBS[U],
 ] struct {
 	store     badgerutils.Instantiator[badgerutils.StoreInstance[[]byte, *U, *U, badgerutils.Iterator[[]byte, *U]]]
 	synthFunc func(key []byte, oldV *T, newV T, oldU, newU *U) (*U, error)
@@ -30,7 +30,7 @@ type AssociateStore[
 func NewAssociateStore[
 	T any,
 	U encoding.BinaryMarshaler,
-	PU sstore.PointerBinarySerializable[U],
+	PU sstore.PBS[U],
 ](opts ...func(*AssociateStore[T, U, PU])) *AssociateStore[T, U, PU] {
 	as := &AssociateStore[T, U, PU]{}
 	for _, opt := range opts {
@@ -43,7 +43,7 @@ func NewAssociateStore[
 func WithSynthFunc[
 	T any,
 	U encoding.BinaryMarshaler,
-	PU sstore.PointerBinarySerializable[U],
+	PU sstore.PBS[U],
 ](f func(key []byte, oldV *T, newV T, oldU, newU *U) (*U, error)) func(*AssociateStore[T, U, PU]) {
 	return func(as *AssociateStore[T, U, PU]) {
 		as.synthFunc = f
@@ -67,7 +67,7 @@ func (as *AssociateStore[T, U, PU]) Instantiate(txn *badger.Txn) extstore.Extens
 type AssociateStoreInstance[
 	T any,
 	U encoding.BinaryMarshaler,
-	PU sstore.PointerBinarySerializable[U],
+	PU sstore.PBS[U],
 ] struct {
 	store     badgerutils.StoreInstance[[]byte, *U, *U, badgerutils.Iterator[[]byte, *U]]
 	synthFunc func(key []byte, oldV *T, newV T, oldU, newU *U) (*U, error)
