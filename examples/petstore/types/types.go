@@ -16,11 +16,11 @@ func (msg *Pet) UnmarshalBinary(b []byte) error {
 }
 
 // MarshalJSON implements json.Marshaler
-func (m *Pet) MarshalJSON() ([]byte, error) {
-	return protojson.Marshal(m)
+func (msg *Pet) MarshalJSON() ([]byte, error) {
+	return protojson.Marshal(msg)
 }
 
 // UnmarshalJSON implements json.Unmarshaler
-func (m *Pet) UnmarshalJSON(b []byte) error {
-	return protojson.Unmarshal(b, m)
+func (msg *Pet) UnmarshalJSON(b []byte) error {
+	return protojson.Unmarshal(b, msg)
 }
