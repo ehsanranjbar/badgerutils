@@ -30,7 +30,6 @@ func TestStore(t *testing.T) {
 			i++
 			return i, nil
 		}),
-		objstore.WithMetadataFunc[int64](extutil.MetadataSynthFunc[testutil.TestStruct](true)),
 	)
 	require.NoError(t, err)
 

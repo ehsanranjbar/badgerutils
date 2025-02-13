@@ -18,8 +18,7 @@ var (
 
 // AssociateStore is an extension to store additional along with the main object.
 type AssociateStore[
-	T any,
-	U encoding.BinaryMarshaler,
+	T, U any,
 	PU sstore.PBS[U],
 ] struct {
 	store     badgerutils.Instantiator[badgerutils.StoreInstance[[]byte, *U, *U, badgerutils.Iterator[[]byte, *U]]]
@@ -28,8 +27,7 @@ type AssociateStore[
 
 // NewAssociateStore creates a new AssociateStore.
 func NewAssociateStore[
-	T any,
-	U encoding.BinaryMarshaler,
+	T, U any,
 	PU sstore.PBS[U],
 ](opts ...func(*AssociateStore[T, U, PU])) *AssociateStore[T, U, PU] {
 	as := &AssociateStore[T, U, PU]{}
@@ -65,8 +63,7 @@ func (as *AssociateStore[T, U, PU]) Instantiate(txn *badger.Txn) extstore.Extens
 
 // AssociateStoreInstance is an extension to store additional along with the main object.
 type AssociateStoreInstance[
-	T any,
-	U encoding.BinaryMarshaler,
+	T, U any,
 	PU sstore.PBS[U],
 ] struct {
 	store     badgerutils.StoreInstance[[]byte, *U, *U, badgerutils.Iterator[[]byte, *U]]
@@ -127,12 +124,12 @@ func (as *AssociateStoreInstance[T, U, PU]) Get(key []byte) (*U, error) {
 }
 
 // AssociateData is an option for extensible store to set the associated data.
-type AssociateData[U encoding.BinaryMarshaler] struct {
+type AssociateData[U any] struct {
 	data U
 }
 
 // WithAssociateData sets the associated data.
-func WithAssociateData[U encoding.BinaryMarshaler](data U) AssociateData[U] {
+func WithAssociateData[U any](data U) AssociateData[U] {
 	return AssociateData[U]{data: data}
 }
 
@@ -169,10 +166,10 @@ func (m *Metadata) UnmarshalBinary(data []byte) error {
 // MetadataSynthFunc returns a function that can be used as a synthFunc for AssociateStore to store a
 // map[string]any as metadata.
 // If statistics is true, it will set "created_at" and "updated_at" fields for each value in the map.
-func MetadataSynthFunc[T any](statistics bool) func(_ []byte, _ *T, _ T, oldU, newU *Metadata) (*Metadata, error) {
-	return func(_ []byte, oldV *T, _ T, oldU, newU *Metadata) (*Metadata, error) {
+func MetadataSynthFunc[T any, M ~map[string]any](statistics bool) func(_ []byte, _ *T, _ T, oldU, newU *M) (*M, error) {
+	return func(_ []byte, oldV *T, _ T, oldU, newU *M) (*M, error) {
 		if newU == nil || *newU == nil {
-			newU = &Metadata{}
+			newU = &M{}
 		}
 
 		now := time.Now().UTC()
@@ -185,7 +182,7 @@ func MetadataSynthFunc[T any](statistics bool) func(_ []byte, _ *T, _ T, oldU, n
 	}
 }
 
-func mergeMaps(old, new *Metadata) *Metadata {
+func mergeMaps[M ~map[string]any](old, new *M) *M {
 	if old == nil {
 		return new
 	}

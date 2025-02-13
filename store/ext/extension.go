@@ -5,9 +5,11 @@ import (
 )
 
 // Extension is an extension to the object store.
-type Extension[T any] interface {
-	badgerutils.Instantiator[ExtensionInstance[T]]
-	Init(store badgerutils.Instantiator[badgerutils.BadgerStore])
+type Extension[T any] = badgerutils.Instantiator[ExtensionInstance[T]]
+
+// StoreRegistry determines if an extension needs a private store.
+type StoreRegistry interface {
+	RegisterStore(badgerutils.Instantiator[badgerutils.BadgerStore])
 }
 
 // ExtensionInstance is an extension to the object store.

@@ -1,7 +1,6 @@
 package qlutil
 
 import (
-	"encoding"
 	"strings"
 	"time"
 
@@ -10,7 +9,7 @@ import (
 )
 
 // ObjectContextWrapper is a wrapper around an object that implements the qlbridge.ContextReader interface.
-type ObjectContextWrapper[I any, D encoding.BinaryMarshaler] struct {
+type ObjectContextWrapper[I, D any] struct {
 	id        *I
 	data      D
 	metadata  map[string]any
@@ -19,7 +18,7 @@ type ObjectContextWrapper[I any, D encoding.BinaryMarshaler] struct {
 }
 
 // NewObjectContextWrapper creates a new ObjectContextWrapper.
-func NewObjectContextWrapper[I any, D encoding.BinaryMarshaler](
+func NewObjectContextWrapper[I, D any](
 	id *I,
 	data D,
 	metadata map[string]any,

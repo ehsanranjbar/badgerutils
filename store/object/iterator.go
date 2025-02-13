@@ -1,40 +1,25 @@
 package object
 
 import (
-	"encoding"
-
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/codec"
-	"github.com/ehsanranjbar/badgerutils/extutil"
 )
 
 // Iterator is an iterator that unmarshal id, data and optionally fetch metadata.
-type Iterator[I any, D encoding.BinaryMarshaler] struct {
-	base      badgerutils.Iterator[[]byte, *D]
+type Iterator[I, D any] struct {
+	base      badgerutils.Iterator[[]byte, *Object[I, D]]
 	idCodec   codec.Codec[I]
-	metaStore *extutil.AssociateStoreInstance[D, extutil.Metadata, *extutil.Metadata]
-	fetchMeta bool
 }
 
-func newIterator[I any, D encoding.BinaryMarshaler](
-	base badgerutils.Iterator[[]byte, *D],
+func newIterator[I, D any](
+	base badgerutils.Iterator[[]byte, *Object[I, D]],
 	idCodec codec.Codec[I],
-	metaStore *extutil.AssociateStoreInstance[D, extutil.Metadata, *extutil.Metadata],
-	fetchMeta bool,
 ) *Iterator[I, D] {
 	return &Iterator[I, D]{
 		base:      base,
 		idCodec:   idCodec,
-		metaStore: metaStore,
-		fetchMeta: fetchMeta,
 	}
-}
-
-// FetchMeta sets if the iterator should fetch metadata.
-func (it *Iterator[I, D]) FetchMeta(b bool) *Iterator[I, D] {
-	it.fetchMeta = b
-	return it
 }
 
 // Close closes the iterator.
@@ -95,7 +80,7 @@ func (it *Iterator[I, D]) Key() []byte {
 
 // Value returns the current value.
 func (it *Iterator[I, D]) Value() (*Object[I, D], error) {
-	data, err := it.base.Value()
+	obj, err := it.base.Value()
 	if err != nil {
 		return nil, err
 	}
@@ -104,21 +89,7 @@ func (it *Iterator[I, D]) Value() (*Object[I, D], error) {
 	if err != nil {
 		return nil, err
 	}
-	obj := &Object[I, D]{
-		Id:   &id,
-		Data: *data,
-	}
-
-	if it.fetchMeta {
-		meta, err := it.metaStore.Get(it.base.Key())
-		if err != nil {
-			return nil, err
-		}
-
-		if meta != nil {
-			obj.Metadata = *meta
-		}
-	}
+	obj.Id = &id
 
 	return obj, nil
 }

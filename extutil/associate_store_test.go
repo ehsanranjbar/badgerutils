@@ -12,7 +12,7 @@ import (
 func TestAssociateStore(t *testing.T) {
 	as := extutil.NewAssociateStore(
 		extutil.WithSynthFunc(
-			extutil.MetadataSynthFunc[struct{}](true),
+			extutil.MetadataSynthFunc[struct{}, extutil.Metadata](true),
 		),
 	)
 	store := pstore.New(nil, []byte("test"))

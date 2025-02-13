@@ -44,7 +44,9 @@ func New[
 
 	extStore := pstore.New(base, extStorePrefix)
 	for name, ext := range exts {
-		ext.Init(pstore.New(extStore, []byte(name)))
+		if sr, ok := ext.(StoreRegistry); ok {
+			sr.RegisterStore(pstore.New(extStore, []byte(name)))
+		}
 	}
 
 	return &Store[T, PT]{
@@ -234,8 +236,10 @@ func (s *ManagerInstance[T, PT]) AddExtension(name string, ext Extension[T]) err
 		return fmt.Errorf("an extension already registered with name %s", name)
 	}
 
-	es := pstore.New(s.store.extStore, []byte(name))
-	ext.Init(es)
+	if sr, ok := ext.(StoreRegistry); ok {
+		es := pstore.New(s.store.extStore, []byte(name))
+		sr.RegisterStore(es)
+	}
 
 	iter := s.dataStore.NewIterator(badger.IteratorOptions{})
 	defer iter.Close()
