@@ -32,7 +32,7 @@ func (obj Object[I, D]) MarshalBinary() ([]byte, error) {
 	enc.Reset(&buf)
 	defer msgpack.PutEncoder(enc)
 
-	err := enc.Encode(obj.Data)
+	err := enc.Encode(&obj.Data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode object's data: %w", err)
 	}
