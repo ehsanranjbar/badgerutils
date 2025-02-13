@@ -1,0 +1,29 @@
+syntax = "proto3";
+package types;
+option go_package  = "/types";
+
+message Pet {
+    int64 id = 1;
+    Category category = 2;
+    string name = 3;
+    repeated string photoUrls = 4;
+    repeated Tag tags = 5;
+    Status status = 6;
+}
+
+message Category {
+    int64 id = 1;
+    string name = 2;
+}
+
+message Tag {
+    int64 id = 1;
+    string name = 2;
+}
+
+enum Status {
+    UNKNOWN = 0;
+    AVAILABLE = 1;
+    PENDING = 2;
+    SOLD = 3;
+}
