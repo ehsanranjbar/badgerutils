@@ -4,6 +4,7 @@ import (
 	badger "github.com/dgraph-io/badger/v4"
 )
 
+// Instantiator is an interface that creates a new instance of something from a badger transaction.
 type Instantiator[I any] interface {
 	Instantiate(txn *badger.Txn) I
 }
@@ -16,8 +17,7 @@ type StoreInstance[K, G, S any, I BadgerIterator] interface {
 	Set(key K, value S) error
 }
 
-// BadgerStore is a store that *badger.Txn is compatible with it
-// and has the SetEntry operation which is mandatory for some low-level stores like PrefixStore and SerializedStore.
+// BadgerStore is an store instance that is compatible with *badger.Txn
 type BadgerStore interface {
 	StoreInstance[[]byte, *badger.Item, []byte, *badger.Iterator]
 	SetEntry(e *badger.Entry) error

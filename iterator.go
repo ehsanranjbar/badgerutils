@@ -4,11 +4,15 @@ import (
 	badger "github.com/dgraph-io/badger/v4"
 )
 
-// Iterator has the most common methods for *badger.Iterator along with a Value method
-// which is used in pretty much all high-level stuff of this package because we mostly work with serialized values.
+// Iterator is an interface that extends ValueIterator with a Key method.
 type Iterator[K, V any] interface {
-	BadgerIterator
+	ValueIterator[V]
 	Key() K
+}
+
+// ValueIterator is an interface that extends BadgerIterator with a Value method.
+type ValueIterator[V any] interface {
+	BadgerIterator
 	Value() (value V, err error)
 }
 
