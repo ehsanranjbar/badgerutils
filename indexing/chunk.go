@@ -11,22 +11,22 @@ import (
 	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
 )
 
-// Partition represents a range of keys from low to high with optional exclusivity on both ends.
-type Partition = expr.Range[[]byte]
+// Chunk represents a range of keys from low to high with optional exclusivity on both ends.
+type Chunk = expr.Range[[]byte]
 
-// NewPartition creates a new partition with the given low and high keys and exclusivity.
-func NewPartition(low, high *expr.Bound[[]byte]) Partition {
+// NewChunk creates a new chunk with the given low and high keys and exclusivity.
+func NewChunk(low, high *expr.Bound[[]byte]) Chunk {
 	return expr.NewRange(low, high)
 }
 
-// LookupPartitions returns an iterator that iterates over the keys in the given partition iterator.
-func LookupPartitions(
+// LookupChunks returns an iterator that iterates over the keys in the given chunk iterator.
+func LookupChunks(
 	store *refstore.Instance,
-	parts badgerutils.Iterator[[]byte, Partition],
+	parts badgerutils.Iterator[[]byte, Chunk],
 	opts badger.IteratorOptions,
 ) badgerutils.Iterator[[]byte, []byte] {
 	return iters.Flatten(
-		iters.Map(parts, func(p Partition, _ *badger.Item) (badgerutils.Iterator[[]byte, []byte], error) {
+		iters.Map(parts, func(p Chunk, _ *badger.Item) (badgerutils.Iterator[[]byte, []byte], error) {
 			// Omitting the prefix option.
 			iter := store.NewIterator(badger.IteratorOptions{
 				PrefetchSize:   opts.PrefetchSize,

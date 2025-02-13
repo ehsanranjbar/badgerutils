@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLookupPartitions(t *testing.T) {
+func TestLookupChunks(t *testing.T) {
 	store := refstore.New(nil)
 
 	txn := testutil.PrepareTxn(t, true)
@@ -34,14 +34,14 @@ func TestLookupPartitions(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		parts          []indexing.Partition
+		parts          []indexing.Chunk
 		expectedCount  int
 		expectedRanges []expr.Range[uint64]
 	}{
 		{
 			name: "[0x00, ∞)",
-			parts: []indexing.Partition{
-				indexing.NewPartition(nil, nil),
+			parts: []indexing.Chunk{
+				indexing.NewChunk(nil, nil),
 			},
 			expectedCount: 702,
 			expectedRanges: []expr.Range[uint64]{
@@ -50,8 +50,8 @@ func TestLookupPartitions(t *testing.T) {
 		},
 		{
 			name: "[A, B)",
-			parts: []indexing.Partition{
-				indexing.NewPartition(
+			parts: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound([]byte{'A'}, false),
 					expr.NewBound([]byte{'B'}, true),
 				),
@@ -63,8 +63,8 @@ func TestLookupPartitions(t *testing.T) {
 		},
 		{
 			name: "(A, B]",
-			parts: []indexing.Partition{
-				indexing.NewPartition(
+			parts: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound([]byte{'A'}, true),
 					expr.NewBound([]byte{'B'}, false),
 				),
@@ -76,8 +76,8 @@ func TestLookupPartitions(t *testing.T) {
 		},
 		{
 			name: "[X, Y)",
-			parts: []indexing.Partition{
-				indexing.NewPartition(
+			parts: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound([]byte{'X'}, false),
 					expr.NewBound([]byte{'Y'}, true),
 				),
@@ -89,12 +89,12 @@ func TestLookupPartitions(t *testing.T) {
 		},
 		{
 			name: "[A, B), [X, Y)",
-			parts: []indexing.Partition{
-				indexing.NewPartition(
+			parts: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound([]byte{'A'}, false),
 					expr.NewBound([]byte{'B'}, true),
 				),
-				indexing.NewPartition(
+				indexing.NewChunk(
 					expr.NewBound([]byte{'X'}, false),
 					expr.NewBound([]byte{'Y'}, true),
 				),
@@ -107,8 +107,8 @@ func TestLookupPartitions(t *testing.T) {
 		},
 		{
 			name: "(∞, B)",
-			parts: []indexing.Partition{
-				indexing.NewPartition(
+			parts: []indexing.Chunk{
+				indexing.NewChunk(
 					nil,
 					expr.NewBound([]byte{'B'}, true),
 				),
@@ -120,8 +120,8 @@ func TestLookupPartitions(t *testing.T) {
 		},
 		{
 			name: "[Y, ∞)",
-			parts: []indexing.Partition{
-				indexing.NewPartition(
+			parts: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound([]byte{'Y'}, false),
 					nil,
 				),
@@ -146,15 +146,15 @@ func TestLookupPartitions(t *testing.T) {
 	for _, test := range tests {
 		for _, opt := range opts {
 			t.Run(test.name, func(t *testing.T) {
-				it := indexing.LookupPartitions(ins, iters.Slice(test.parts), opt)
+				it := indexing.LookupChunks(ins, iters.Slice(test.parts), opt)
 				defer it.Close()
 
 				actual, err := iters.Collect(it)
 				require.NoError(t, err)
 				require.Len(t, actual, test.expectedCount)
-				require.True(t, areWithinPartitions(actual, test.expectedRanges), "collected keys are not within expected ranges")
+				require.True(t, areWithinChunks(actual, test.expectedRanges), "collected keys are not within expected ranges")
 
-				// Checking multi-partition sorting is a bit difficult, so we skip it for now.
+				// Checking multi-chunk sorting is a bit difficult, so we skip it for now.
 				if len(test.expectedRanges) < 2 {
 					cmpFunc := bytes.Compare
 					if opt.Reverse {
@@ -169,9 +169,9 @@ func TestLookupPartitions(t *testing.T) {
 	}
 }
 
-func areWithinPartitions(items [][]byte, ranges []expr.Range[uint64]) bool {
+func areWithinChunks(items [][]byte, ranges []expr.Range[uint64]) bool {
 	for _, item := range items {
-		if !isWithinPartitions(item, ranges) {
+		if !isWithinChunks(item, ranges) {
 			return false
 		}
 	}
@@ -179,7 +179,7 @@ func areWithinPartitions(items [][]byte, ranges []expr.Range[uint64]) bool {
 	return true
 }
 
-func isWithinPartitions(item []byte, ranges []expr.Range[uint64]) bool {
+func isWithinChunks(item []byte, ranges []expr.Range[uint64]) bool {
 	for _, r := range ranges {
 		if isWithin(r, binary.BigEndian.Uint64(item)) {
 			return true

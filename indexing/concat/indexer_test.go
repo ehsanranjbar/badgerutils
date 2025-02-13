@@ -167,15 +167,15 @@ func TestIndexer_Lookup(t *testing.T) {
 		name       string
 		components []concat.Component
 		args       []any
-		want       []indexing.Partition
+		want       []indexing.Chunk
 		wantErr    bool
 	}{
 		{
 			name:       "Single component equal",
 			components: []concat.Component{concat.NewComponent("Str1")},
 			args:       []any{expr.NewAssigned("Str1", expr.NewExact[any]("Alice"))},
-			want: []indexing.Partition{
-				indexing.NewPartition(
+			want: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), false),
 					expr.NewBound(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), false),
 				),
@@ -188,8 +188,8 @@ func TestIndexer_Lookup(t *testing.T) {
 				expr.NewAssigned("Str2", expr.NewExact[any]("Male")),
 				expr.NewAssigned("Int", expr.NewExact[any](int(30))),
 			},
-			want: []indexing.Partition{
-				indexing.NewPartition(
+			want: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound(append(be.PadOrTruncRight([]byte("Male"), concat.DefaultMaxComponentSize), lex.EncodeInt64(30)...), false),
 					expr.NewBound(append(be.PadOrTruncRight([]byte("Male"), concat.DefaultMaxComponentSize), lex.EncodeInt64(30)...), false),
 				),
@@ -205,8 +205,8 @@ func TestIndexer_Lookup(t *testing.T) {
 					expr.NewBound[any](int(30), false),
 				),
 			)},
-			want: []indexing.Partition{
-				indexing.NewPartition(
+			want: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound(lex.EncodeInt64(0), false),
 					expr.NewBound(lex.EncodeInt64(30), false),
 				),
@@ -221,8 +221,8 @@ func TestIndexer_Lookup(t *testing.T) {
 			args: []any{
 				expr.NewAssigned("Int", expr.NewRange(expr.NewBound[any](5, true), nil)),
 			},
-			want: []indexing.Partition{
-				indexing.NewPartition(
+			want: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound(append(lex.EncodeInt64(6), bytes.Repeat([]byte{0}, 8)...), false),
 					expr.NewBound(append(lex.EncodeInt64(math.MaxInt64), bytes.Repeat([]byte{0xff}, 8)...), false),
 				),
@@ -232,16 +232,16 @@ func TestIndexer_Lookup(t *testing.T) {
 			name:       "In",
 			components: []concat.Component{concat.NewComponent("Int").WithSize(8)},
 			args:       []any{expr.NewAssigned("Int", expr.NewSet[any](int(10), int(20), int(30)))},
-			want: []indexing.Partition{
-				indexing.NewPartition(
+			want: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound(lex.EncodeInt64(10), false),
 					expr.NewBound(lex.EncodeInt64(10), false),
 				),
-				indexing.NewPartition(
+				indexing.NewChunk(
 					expr.NewBound(lex.EncodeInt64(20), false),
 					expr.NewBound(lex.EncodeInt64(20), false),
 				),
-				indexing.NewPartition(
+				indexing.NewChunk(
 					expr.NewBound(lex.EncodeInt64(30), false),
 					expr.NewBound(lex.EncodeInt64(30), false),
 				),
@@ -251,8 +251,8 @@ func TestIndexer_Lookup(t *testing.T) {
 			name:       "Omitted component",
 			components: []concat.Component{concat.NewComponent("Str1"), concat.NewComponent("Str2")},
 			args:       []any{expr.NewAssigned("Str1", expr.NewExact[any]("Alice"))},
-			want: []indexing.Partition{
-				indexing.NewPartition(
+			want: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound(append(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), make([]byte, concat.DefaultMaxComponentSize)...), false),
 					expr.NewBound(append(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), bytes.Repeat([]byte{0xff}, concat.DefaultMaxComponentSize)...), false),
 				),
@@ -262,8 +262,8 @@ func TestIndexer_Lookup(t *testing.T) {
 			name:       "Nested struct equal",
 			components: []concat.Component{concat.NewComponent("Struct.Test").WithSize(8)},
 			args:       []any{expr.NewAssigned("Struct.Test", expr.NewExact[any](int64(42)))},
-			want: []indexing.Partition{
-				indexing.NewPartition(
+			want: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound(lex.EncodeInt64(42), false),
 					expr.NewBound(lex.EncodeInt64(42), false),
 				),
@@ -273,8 +273,8 @@ func TestIndexer_Lookup(t *testing.T) {
 			name:       "Pointer to struct equal",
 			components: []concat.Component{concat.NewComponent("Pointer.Test").WithSize(8)},
 			args:       []any{expr.NewAssigned("Pointer.Test", expr.NewExact[any](int64(42)))},
-			want: []indexing.Partition{
-				indexing.NewPartition(
+			want: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound(lex.EncodeInt64(42), false),
 					expr.NewBound(lex.EncodeInt64(42), false),
 				),
@@ -284,8 +284,8 @@ func TestIndexer_Lookup(t *testing.T) {
 			name:       "Descending order equal",
 			components: []concat.Component{concat.NewComponent("Int").WithSize(8).Desc()},
 			args:       []any{expr.NewAssigned("Int", expr.NewExact[any](int64(30)))},
-			want: []indexing.Partition{
-				indexing.NewPartition(
+			want: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound(lex.Invert(lex.EncodeInt64(30)), false),
 					expr.NewBound(lex.Invert(lex.EncodeInt64(30)), false),
 				),
@@ -295,8 +295,8 @@ func TestIndexer_Lookup(t *testing.T) {
 			name:       "Slice equal",
 			components: []concat.Component{concat.NewComponent("StrSlice")},
 			args:       []any{expr.NewAssigned("StrSlice", expr.NewExact[any]("Alice"))},
-			want: []indexing.Partition{
-				indexing.NewPartition(
+			want: []indexing.Chunk{
+				indexing.NewChunk(
 					expr.NewBound(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), false),
 					expr.NewBound(be.PadOrTruncRight([]byte("Alice"), concat.DefaultMaxComponentSize), false),
 				),

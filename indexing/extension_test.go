@@ -44,7 +44,7 @@ func (i TestIndexer) Index(v *TestStruct, update bool) ([]badgerutils.RawKVPair,
 	}, nil
 }
 
-func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[[]byte, indexing.Partition], error) {
+func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[[]byte, indexing.Chunk], error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("no arguments")
 	}
@@ -66,7 +66,7 @@ func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[[]byte, indexing.
 	}
 
 	high := lex.Increment(bytes.Clone(low))
-	return iters.Slice([]indexing.Partition{indexing.NewPartition(expr.NewBound(low, false), expr.NewBound(high, true))}), nil
+	return iters.Slice([]indexing.Chunk{indexing.NewChunk(expr.NewBound(low, false), expr.NewBound(high, true))}), nil
 }
 
 func TestObjectStore(t *testing.T) {

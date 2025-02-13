@@ -32,7 +32,7 @@ func (i TestIndexer) Index(v *TestStruct, update bool) ([]badgerutils.RawKVPair,
 	return []badgerutils.RawKVPair{}, nil
 }
 
-func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[[]byte, indexing.Partition], error) {
+func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[[]byte, indexing.Chunk], error) {
 	return nil, nil
 }
 

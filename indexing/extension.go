@@ -93,7 +93,7 @@ func (e *ExtensionInstance[T]) Lookup(opts badger.IteratorOptions, args ...any) 
 		return nil, err
 	}
 
-	return LookupPartitions(e.store, iter, opts), nil
+	return LookupChunks(e.store, iter, opts), nil
 }
 
 // SupportedQueries returns the supported queries of the index.
