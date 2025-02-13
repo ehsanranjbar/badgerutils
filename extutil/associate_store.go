@@ -172,11 +172,13 @@ func MetadataSynthFunc[T any, M ~map[string]any](statistics bool) func(_ []byte,
 			newU = &M{}
 		}
 
-		now := time.Now().UTC()
-		if oldV == nil && statistics {
-			(*newU)["created_at"] = now
+		if statistics {
+			now := time.Now().UTC()
+			if oldV == nil {
+				(*newU)["created_at"] = now
+			}
+			(*newU)["updated_at"] = now
 		}
-		(*newU)["updated_at"] = now
 
 		return mergeMaps(oldU, newU), nil
 	}
