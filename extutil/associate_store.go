@@ -193,6 +193,10 @@ func mergeMaps[M ~map[string]any](old, new *M) *M {
 	}
 
 	for k, v := range *new {
+		if v == nil {
+			delete(*old, k)
+			continue
+		}
 		(*old)[k] = v
 	}
 	return old
