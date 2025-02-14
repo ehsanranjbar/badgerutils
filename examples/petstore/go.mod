@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/dgraph-io/badger/v4 v4.5.1
-	github.com/ehsanranjbar/badgerutils v0.0.0-20250213135002-430d6b6ca474
+	github.com/ehsanranjbar/badgerutils v0.0.0-20250214231947-c2dd1731a0d1
 	github.com/labstack/echo/v4 v4.13.3
 	google.golang.org/protobuf v1.36.5
 )
@@ -22,7 +22,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/flatbuffers v25.2.10+incompatible // indirect
-	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/lytics/datemath v0.0.0-20180727225141-3ada1c10b5de // indirect
@@ -37,6 +36,7 @@ require (
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
+	golang.org/x/exp v0.0.0-20250210185358-939b2ce775ac // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.22.0 // indirect

@@ -22,8 +22,8 @@ message Tag {
 }
 
 enum Status {
-    UNKNOWN = 0;
-    AVAILABLE = 1;
-    PENDING = 2;
-    SOLD = 3;
+    unknown = 0;
+    available = 1;
+    pending = 2;
+    sold = 3;
 }
