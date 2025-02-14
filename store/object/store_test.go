@@ -54,6 +54,7 @@ func TestStore(t *testing.T) {
 			F: &testutil.TestStruct{A: 20},
 		}
 	)
+	i = 3
 
 	t.Run("NotFound", func(t *testing.T) {
 		v, err := ins.Get(key1)
@@ -123,5 +124,13 @@ func TestStore(t *testing.T) {
 
 		_, err = ins.Get(key1)
 		require.Error(t, err)
+	})
+
+	t.Run("Append", func(t *testing.T) {
+		obj, err := ins.Append(testutil.TestStruct{})
+		require.NoError(t, err)
+
+		require.NotNil(t, obj.Id)
+		require.Equal(t, int64(4), *obj.Id)
 	})
 }

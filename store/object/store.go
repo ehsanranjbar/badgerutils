@@ -210,7 +210,7 @@ type Instance[I, D any] struct {
 	extractor    schema.PathExtractor[D]
 }
 
-// Delete deletes the key from the store.
+// Delete implements the badgerutils.StoreInstance interface.
 func (s *Instance[I, D]) Delete(id I) error {
 	key, err := s.idCodec.Encode(id)
 	if err != nil {
@@ -250,7 +250,7 @@ func (s *Instance[I, D]) GetObject(id I) (*Object[I, D], error) {
 	return obj, nil
 }
 
-// NewIterator creates a new iterator over the objects.
+// NewIterator implements the badgerutils.StoreInstance interface.
 func (s *Instance[I, D]) NewIterator(opts badger.IteratorOptions) *Iterator[I, D] {
 	return newIterator(s.base.NewIterator(opts), s.idCodec)
 }
@@ -265,6 +265,7 @@ func (s *Instance[I, D]) Set(key I, data D) error {
 }
 
 // SetObject sets the object to the store.
+// If the object has no id, it will be generated using the id function.
 func (s *Instance[I, D]) SetObject(obj *Object[I, D], opts ...any) error {
 	if obj.Id == nil {
 		if s.idFunc == nil {
@@ -311,6 +312,17 @@ func (s *Instance[I, D]) updateMetadata(key []byte, obj *Object[I, D]) error {
 	obj.Metadata = *newMeta
 
 	return nil
+}
+
+// Append creates a new object with the given data and new id and stores it.
+func (s *Instance[I, D]) Append(data D) (*Object[I, D], error) {
+	obj := &Object[I, D]{Data: data}
+	err := s.SetObject(obj)
+	if err != nil {
+		return nil, err
+	}
+
+	return obj, nil
 }
 
 // Query returns the query for the store.
