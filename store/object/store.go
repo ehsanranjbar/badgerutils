@@ -18,6 +18,8 @@ import (
 	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
+var _ badgerutils.StoreInstance[int64, *struct{}, struct{}, *Iterator[int64, struct{}]] = (*Instance[int64, struct{}])(nil)
+
 // Object is a generic object that can be stored in a Store.
 type Object[I, D any] struct {
 	Id       *I             `json:"id,omitempty"`
@@ -218,7 +220,7 @@ func (s *Instance[I, D]) Delete(id I) error {
 	return s.base.Delete(key)
 }
 
-// Get gets the object with given id from the store.
+// Get implements the badgerutils.StoreInstance interface.
 func (s *Instance[I, D]) Get(id I) (*D, error) {
 	key, err := s.idCodec.Encode(id)
 	if err != nil {
@@ -250,53 +252,30 @@ func (s *Instance[I, D]) GetObject(id I) (*Object[I, D], error) {
 
 // NewIterator creates a new iterator over the objects.
 func (s *Instance[I, D]) NewIterator(opts badger.IteratorOptions) *Iterator[I, D] {
-	return newIterator[I, D](s.base.NewIterator(opts), s.idCodec)
+	return newIterator(s.base.NewIterator(opts), s.idCodec)
 }
 
-// Set sets the object with given id to the store.
-func (s *Instance[I, D]) Set(d D, opts ...func(*Object[I, D])) error {
-	obj := &Object[I, D]{Data: d}
-	for _, opt := range opts {
-		opt(obj)
+// Set implements the badgerutils.StoreInstance interface.
+func (s *Instance[I, D]) Set(key I, data D) error {
+	obj := &Object[I, D]{
+		Id:   &key,
+		Data: data,
 	}
-
-	if obj.Id == nil {
-		if s.idFunc == nil {
-			return fmt.Errorf("no id function with nil id")
-		}
-
-		id, err := s.idFunc(&d)
-		if err != nil {
-			return err
-		}
-		obj.Id = &id
-	}
-
 	return s.SetObject(obj)
-}
-
-// WithId is an option to set the id of the object.
-func WithId[I, D any](
-	id I,
-) func(*Object[I, D]) {
-	return func(o *Object[I, D]) {
-		o.Id = &id
-	}
-}
-
-// WithMetadata is an option to set the metadata of the object.
-func WithMetadata[I, D any](
-	m map[string]any,
-) func(*Object[I, D]) {
-	return func(o *Object[I, D]) {
-		o.Metadata = m
-	}
 }
 
 // SetObject sets the object to the store.
 func (s *Instance[I, D]) SetObject(obj *Object[I, D], opts ...any) error {
 	if obj.Id == nil {
-		return fmt.Errorf("nil id is not allowed")
+		if s.idFunc == nil {
+			return fmt.Errorf("no id function with nil id")
+		}
+
+		id, err := s.idFunc(&obj.Data)
+		if err != nil {
+			return err
+		}
+		obj.Id = &id
 	}
 
 	key, err := s.idCodec.Encode(*obj.Id)

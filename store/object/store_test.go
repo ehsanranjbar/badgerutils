@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/ehsanranjbar/badgerutils/extutil"
 	"github.com/ehsanranjbar/badgerutils/iters"
 	objstore "github.com/ehsanranjbar/badgerutils/store/object"
 	"github.com/ehsanranjbar/badgerutils/testutil"
@@ -19,7 +18,10 @@ func TestStore(t *testing.T) {
 	ins := store.Instantiate(txn)
 
 	t.Run("SetWithNilId", func(t *testing.T) {
-		err := ins.Set(testutil.TestStruct{})
+		err := ins.SetObject(&objstore.Object[int64, testutil.TestStruct]{
+			Id:   nil,
+			Data: testutil.TestStruct{},
+		})
 		require.Error(t, err)
 	})
 
@@ -60,10 +62,19 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("Set", func(t *testing.T) {
-		err := ins.Set(value1)
+		err := ins.Set(key1, value1)
 		require.NoError(t, err)
+	})
 
-		err = ins.Set(value2, objstore.WithId[int64, testutil.TestStruct](key2), objstore.WithMetadata[int64, testutil.TestStruct](extutil.Metadata{"key": "value"}))
+	t.Run("SetObject", func(t *testing.T) {
+		obj := &objstore.Object[int64, testutil.TestStruct]{
+			Id:   &key2,
+			Data: value2,
+			Metadata: map[string]interface{}{
+				"key": "value",
+			},
+		}
+		err := ins.SetObject(obj)
 		require.NoError(t, err)
 	})
 
