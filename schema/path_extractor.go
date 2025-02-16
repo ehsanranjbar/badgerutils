@@ -22,7 +22,7 @@ type ReflectPathExtractor[T any] struct {
 // NewReflectPathExtractor creates a new ReflectPathExtractor for the given type.
 func NewReflectPathExtractor[T any](returnAny bool) ReflectPathExtractor[T] {
 	rt := reflect.TypeFor[T]()
-	if rt.Kind() != reflect.Struct {
+	if unwrapPtr(rt).Kind() != reflect.Struct {
 		panic(fmt.Sprintf("reflect path extractor only supports struct types but got %s", rt))
 	}
 

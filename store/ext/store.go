@@ -15,6 +15,7 @@ var (
 	extStorePrefix  = []byte("ext")
 )
 
+// Store is a store that executes hooks on object creation and deletion.
 type Store[
 	T any,
 	PT sstore.PBS[T],
@@ -22,6 +23,7 @@ type Store[
 	dataStore *sstore.Store[T, PT]
 	extStore  *pstore.Store
 	exts      map[string]Extension[T]
+	extsOrder []string
 	prefix    []byte
 }
 
@@ -31,34 +33,40 @@ func New[
 	PT sstore.PBS[T],
 ](
 	base badgerutils.Instantiator[badgerutils.BadgerStore],
-	exts map[string]Extension[T],
+	opts ...func(*Store[T, PT]),
 ) *Store[T, PT] {
-	if exts == nil {
-		exts = make(map[string]Extension[T])
-	}
-
 	var prefix []byte
 	if pfx, ok := base.(prefixed); ok {
 		prefix = pfx.Prefix()
 	}
 
-	extStore := pstore.New(base, extStorePrefix)
-	for name, ext := range exts {
-		if sr, ok := ext.(StoreRegistry); ok {
-			sr.RegisterStore(pstore.New(extStore, []byte(name)))
-		}
-	}
-
-	return &Store[T, PT]{
+	store := &Store[T, PT]{
 		dataStore: sstore.New[T, PT](pstore.New(base, dataStorePrefix)),
-		extStore:  extStore,
-		exts:      exts,
+		extStore:  pstore.New(base, extStorePrefix),
+		exts:      make(map[string]Extension[T]),
 		prefix:    prefix,
 	}
+	for _, opt := range opts {
+		opt(store)
+	}
+
+	return store
 }
 
 type prefixed interface {
 	Prefix() []byte
+}
+
+// WithExtension adds an extension to the store.
+func WithExtension[T any, PT sstore.PBS[T]](name string, ext Extension[T]) func(*Store[T, PT]) {
+	return func(s *Store[T, PT]) {
+		if sr, ok := ext.(StoreRegistry); ok {
+			sr.RegisterStore(pstore.New(s.extStore, []byte(name)))
+		}
+
+		s.exts[name] = ext
+		s.extsOrder = append(s.extsOrder, name)
+	}
 }
 
 // Instantiate creates a new Instance.
@@ -66,14 +74,15 @@ func (s *Store[T, PT]) Instantiate(txn *badger.Txn) *Instance[T, PT] {
 	return &Instance[T, PT]{
 		dataStore: s.dataStore.Instantiate(txn),
 		exts:      s.instantiateExts(txn),
+		extsOrder: s.extsOrder,
 		prefix:    s.prefix,
 	}
 }
 
 func (s *Store[T, PT]) instantiateExts(txn *badger.Txn) map[string]ExtensionInstance[T] {
 	exts := make(map[string]ExtensionInstance[T])
-	for name, ext := range s.exts {
-		exts[name] = ext.Instantiate(txn)
+	for _, name := range s.extsOrder {
+		exts[name] = s.exts[name].Instantiate(txn)
 	}
 
 	return exts
@@ -99,6 +108,7 @@ type Instance[
 ] struct {
 	dataStore badgerutils.StoreInstance[[]byte, *T, *T, badgerutils.Iterator[[]byte, *T]]
 	exts      map[string]ExtensionInstance[T]
+	extsOrder []string
 	prefix    []byte
 }
 
@@ -107,7 +117,7 @@ func (s *Instance[T, PT]) Prefix() []byte {
 	return s.prefix
 }
 
-// Delete deletes an object along with all it's auxiliary references (i.e. secondary indexes).
+// Delete deletes an object along with all its auxiliary references (i.e. secondary indexes).
 func (s *Instance[T, PT]) Delete(key []byte) error {
 	err := s.onDelete(key)
 	if err != nil {
@@ -132,8 +142,8 @@ func (s *Instance[T, PT]) onDelete(key []byte) error {
 		return err
 	}
 
-	for name, ext := range s.exts {
-		err := ext.OnDelete(key, data)
+	for _, name := range s.extsOrder {
+		err := s.exts[name].OnDelete(key, data)
 		if err != nil {
 			return fmt.Errorf("failure in running extension %s OnDelete: %w", name, err)
 		}
@@ -182,9 +192,9 @@ func (s *Instance[T, PT]) onSet(key []byte, old, new *T, opts ...any) error {
 		return nil
 	}
 
-	for name, ext := range s.exts {
+	for _, name := range s.extsOrder {
 		extOpts := filterOptions(name, opts)
-		err := ext.OnSet(key, old, new, extOpts...)
+		err := s.exts[name].OnSet(key, old, new, extOpts...)
 		if err != nil {
 			return fmt.Errorf("failure in running extension %s OnSet: %w", name, err)
 		}

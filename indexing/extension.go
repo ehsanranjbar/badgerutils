@@ -24,7 +24,7 @@ func NewExtension[T any](indexer Indexer[T]) ext.Extension[T] {
 }
 
 // Init implements the extensible.Extension interface.
-func (e *Extension[T]) Init(store badgerutils.Instantiator[badgerutils.BadgerStore]) {
+func (e *Extension[T]) RegisterStore(store badgerutils.Instantiator[badgerutils.BadgerStore]) {
 	e.store = refstore.New(store)
 }
 

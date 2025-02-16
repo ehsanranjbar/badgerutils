@@ -22,7 +22,7 @@ type AssociateStore[
 	PU sstore.PBS[U],
 ] struct {
 	store     badgerutils.Instantiator[badgerutils.StoreInstance[[]byte, *U, *U, badgerutils.Iterator[[]byte, *U]]]
-	synthFunc func(key []byte, oldV *T, newV T, oldU, newU *U) (*U, error)
+	synthFunc func(key []byte, oldV, newV *T, oldU, newU *U) (*U, error)
 }
 
 // NewAssociateStore creates a new AssociateStore.
@@ -42,7 +42,7 @@ func WithSynthFunc[
 	T any,
 	U encoding.BinaryMarshaler,
 	PU sstore.PBS[U],
-](f func(key []byte, oldV *T, newV T, oldU, newU *U) (*U, error)) func(*AssociateStore[T, U, PU]) {
+](f func(key []byte, oldV, newV *T, oldU, newU *U) (*U, error)) func(*AssociateStore[T, U, PU]) {
 	return func(as *AssociateStore[T, U, PU]) {
 		as.synthFunc = f
 	}
@@ -67,7 +67,7 @@ type AssociateStoreInstance[
 	PU sstore.PBS[U],
 ] struct {
 	store     badgerutils.StoreInstance[[]byte, *U, *U, badgerutils.Iterator[[]byte, *U]]
-	synthFunc func(key []byte, oldV *T, newV T, oldU, newU *U) (*U, error)
+	synthFunc func(key []byte, oldV, newV *T, oldU, newU *U) (*U, error)
 }
 
 // OnDelete implements the Extension interface.
@@ -93,11 +93,7 @@ func (as *AssociateStoreInstance[T, U, PU]) set(k []byte, oldV, newV *T, u *U) e
 			return err
 		}
 
-		var safeNewV T
-		if newV != nil {
-			safeNewV = *newV
-		}
-		u, err = as.synthFunc(k, oldV, safeNewV, oldU, u)
+		u, err = as.synthFunc(k, oldV, newV, oldU, u)
 		if err != nil {
 			return err
 		}
@@ -166,8 +162,8 @@ func (m *Metadata) UnmarshalBinary(data []byte) error {
 // MetadataSynthFunc returns a function that can be used as a synthFunc for AssociateStore to store a
 // map[string]any as metadata.
 // If statistics is true, it will set "created_at" and "updated_at" fields for each value in the map.
-func MetadataSynthFunc[T any, M ~map[string]any](statistics bool) func(_ []byte, _ *T, _ T, oldU, newU *M) (*M, error) {
-	return func(_ []byte, oldV *T, _ T, oldU, newU *M) (*M, error) {
+func MetadataSynthFunc[T any, M ~map[string]any](statistics bool) func(_ []byte, _, _ *T, oldU, newU *M) (*M, error) {
+	return func(_ []byte, oldV, _ *T, oldU, newU *M) (*M, error) {
 		if newU == nil || *newU == nil {
 			newU = &M{}
 		}

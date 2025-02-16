@@ -16,14 +16,15 @@ import (
 	"github.com/ehsanranjbar/badgerutils/schema"
 	extstore "github.com/ehsanranjbar/badgerutils/store/ext"
 	msgpack "github.com/vmihailenco/msgpack/v5"
+	"golang.org/x/exp/constraints"
 )
 
-var _ badgerutils.StoreInstance[int64, *struct{}, struct{}, *Iterator[int64, struct{}]] = (*Instance[int64, struct{}])(nil)
+var _ badgerutils.StoreInstance[int64, *struct{}, *struct{}, *Iterator[int64, struct{}]] = (*Instance[int64, struct{}])(nil)
 
 // Object is a generic object that can be stored in a Store.
 type Object[I, D any] struct {
 	Id       *I             `json:"id,omitempty"`
-	Data     D              `json:"data,omitempty"`
+	Data     *D             `json:"data,omitempty"`
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
@@ -71,9 +72,9 @@ type Store[I, D any] struct {
 	base          *extstore.Store[Object[I, D], *Object[I, D]]
 	idFunc        func(*D) (I, error)
 	idCodec       codec.Codec[I]
-	metadataFunc  func(key []byte, oldV *D, newV D, oldU, newU *map[string]any) (*map[string]any, error)
+	metadataFunc  func(key []byte, oldV, newV *D, oldU, newU *map[string]any) (*map[string]any, error)
 	indexers      map[string]*indexing.Extension[D]
-	extractor     schema.PathExtractor[D]
+	extractor     schema.PathExtractor[*D]
 	flatExtractor schema.PathExtractor[[]byte]
 }
 
@@ -100,17 +101,20 @@ func New[I, D any](
 		s.metadataFunc = extutil.MetadataSynthFunc[D, map[string]any](true)
 	}
 
-	exts := map[string]extstore.Extension[Object[I, D]]{}
+	exts := []func(*extstore.Store[Object[I, D], *Object[I, D]]){}
 	for name, idx := range s.indexers {
 		extName := "idx/" + name
-		exts[extName] = extutil.NewMapWrapper(idx, func(obj *Object[I, D]) *D {
-			return &obj.Data
-		})
+		exts = append(
+			exts,
+			extstore.WithExtension(extName, extutil.NewMapWrapper(idx, func(obj *Object[I, D]) *D {
+				return obj.Data
+			})),
+		)
 	}
-	s.base = extstore.New[Object[I, D], *Object[I, D]](base, exts)
+	s.base = extstore.New[Object[I, D], *Object[I, D]](base, exts...)
 
 	if s.extractor == nil {
-		s.extractor = schema.NewReflectPathExtractor[D](true)
+		s.extractor = schema.NewReflectPathExtractor[*D](true)
 	}
 
 	return s, nil
@@ -125,6 +129,21 @@ func WithIdFunc[I, D any](
 	}
 }
 
+// WithSeqAsIdFunc is an option to set the id function to use a sequence.
+func WithSeqAsIdFunc[I constraints.Integer, D any](
+	seq *badger.Sequence,
+) func(*Store[I, D]) {
+	return func(s *Store[I, D]) {
+		s.idFunc = func(_ *D) (I, error) {
+			id, err := seq.Next()
+			if err != nil {
+				return 0, fmt.Errorf("failed to generate id: %w", err)
+			}
+			return I(id), nil
+		}
+	}
+}
+
 // WithIdCodec is an option to set the id codec.
 func WithIdCodec[I, D any](
 	c codec.Codec[I],
@@ -136,7 +155,7 @@ func WithIdCodec[I, D any](
 
 // WithMetadataFunc is an option to set the metadata function.
 func WithMetadataFunc[I, D any](
-	f func(_ []byte, _ *D, _ D, oldU, newU *map[string]any) (*map[string]any, error),
+	f func(_ []byte, _, _ *D, oldU, newU *map[string]any) (*map[string]any, error),
 ) func(*Store[I, D]) {
 	return func(s *Store[I, D]) {
 		s.metadataFunc = f
@@ -159,7 +178,7 @@ func WithIndexer[I, D any](
 
 // WithExtractor is an option to set the extractor.
 func WithExtractor[I, D any](
-	e schema.PathExtractor[D],
+	e schema.PathExtractor[*D],
 ) func(*Store[I, D]) {
 	return func(s *Store[I, D]) {
 		s.extractor = e
@@ -206,8 +225,8 @@ type Instance[I, D any] struct {
 	base         *extstore.Instance[Object[I, D], *Object[I, D]]
 	idFunc       func(*D) (I, error)
 	idCodec      codec.Codec[I]
-	metadataFunc func(key []byte, oldV *D, newV D, oldU, newU *map[string]any) (*map[string]any, error)
-	extractor    schema.PathExtractor[D]
+	metadataFunc func(key []byte, oldV, newV *D, oldU, newU *map[string]any) (*map[string]any, error)
+	extractor    schema.PathExtractor[*D]
 }
 
 // Delete implements the badgerutils.StoreInstance interface.
@@ -231,7 +250,7 @@ func (s *Instance[I, D]) Get(id I) (*D, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &obj.Data, nil
+	return obj.Data, nil
 }
 
 // GetObject gets the object with given id from the store.
@@ -256,7 +275,7 @@ func (s *Instance[I, D]) NewIterator(opts badger.IteratorOptions) *Iterator[I, D
 }
 
 // Set implements the badgerutils.StoreInstance interface.
-func (s *Instance[I, D]) Set(key I, data D) error {
+func (s *Instance[I, D]) Set(key I, data *D) error {
 	obj := &Object[I, D]{
 		Id:   &key,
 		Data: data,
@@ -272,7 +291,7 @@ func (s *Instance[I, D]) SetObject(obj *Object[I, D], opts ...any) error {
 			return fmt.Errorf("no id function with nil id")
 		}
 
-		id, err := s.idFunc(&obj.Data)
+		id, err := s.idFunc(obj.Data)
 		if err != nil {
 			return err
 		}
@@ -302,7 +321,7 @@ func (s *Instance[I, D]) updateMetadata(key []byte, obj *Object[I, D]) error {
 		oldMeta *map[string]any
 	)
 	if oldObj != nil {
-		oldData = &oldObj.Data
+		oldData = oldObj.Data
 		oldMeta = &oldObj.Metadata
 	}
 	newMeta, err := s.metadataFunc(key, oldData, obj.Data, oldMeta, &obj.Metadata)
@@ -315,7 +334,7 @@ func (s *Instance[I, D]) updateMetadata(key []byte, obj *Object[I, D]) error {
 }
 
 // Append creates a new object with the given data and new id and stores it.
-func (s *Instance[I, D]) Append(data D) (*Object[I, D], error) {
+func (s *Instance[I, D]) Append(data *D) (*Object[I, D], error) {
 	obj := &Object[I, D]{Data: data}
 	err := s.SetObject(obj)
 	if err != nil {

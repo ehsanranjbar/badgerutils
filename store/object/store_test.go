@@ -20,7 +20,7 @@ func TestStore(t *testing.T) {
 	t.Run("SetWithNilId", func(t *testing.T) {
 		err := ins.SetObject(&objstore.Object[int64, testutil.TestStruct]{
 			Id:   nil,
-			Data: testutil.TestStruct{},
+			Data: &testutil.TestStruct{},
 		})
 		require.Error(t, err)
 	})
@@ -63,14 +63,14 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("Set", func(t *testing.T) {
-		err := ins.Set(key1, value1)
+		err := ins.Set(key1, &value1)
 		require.NoError(t, err)
 	})
 
 	t.Run("SetObject", func(t *testing.T) {
 		obj := &objstore.Object[int64, testutil.TestStruct]{
 			Id:   &key2,
-			Data: value2,
+			Data: &value2,
 			Metadata: map[string]interface{}{
 				"key": "value",
 			},
@@ -93,12 +93,12 @@ func TestStore(t *testing.T) {
 		obj, err := ins.GetObject(key1)
 		require.NoError(t, err)
 		require.Equal(t, key1, *obj.Id)
-		require.Equal(t, value1, obj.Data)
+		require.Equal(t, value1, *obj.Data)
 
 		obj, err = ins.GetObject(key2)
 		require.NoError(t, err)
 		require.Equal(t, key2, *obj.Id)
-		require.Equal(t, value2, obj.Data)
+		require.Equal(t, value2, *obj.Data)
 		require.Contains(t, obj.Metadata, "key")
 	})
 
@@ -127,7 +127,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("Append", func(t *testing.T) {
-		obj, err := ins.Append(testutil.TestStruct{})
+		obj, err := ins.Append(&testutil.TestStruct{})
 		require.NoError(t, err)
 
 		require.NotNil(t, obj.Id)
