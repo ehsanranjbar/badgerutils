@@ -17,7 +17,8 @@ var (
 	extStorePrefix  = []byte{0x01}
 )
 
-// Store is a store that executes hooks on object creation and deletion.
+// Store is a wrapper around a serialized store with an ordered list of extensions
+// that can modify data before it is stored or do arbitrary operations on set and delete.
 type Store[
 	T any,
 	PT sstore.PBS[T],
@@ -105,7 +106,7 @@ func (s *Store[T, PT]) Prefix() []byte {
 	return s.prefix
 }
 
-// Instance is a store that stores objects.
+// Instance is an instance of Store.
 type Instance[
 	T any,
 	PT sstore.PBS[T],
@@ -120,7 +121,7 @@ func (s *Instance[T, PT]) Prefix() []byte {
 	return s.prefix
 }
 
-// Delete deletes an object along with all its auxiliary references (i.e. secondary indexes).
+// Delete implements the badgerutils.StoreInstance interface.
 func (s *Instance[T, PT]) Delete(key []byte) error {
 	err := s.onDelete(key)
 	if err != nil {
@@ -129,7 +130,7 @@ func (s *Instance[T, PT]) Delete(key []byte) error {
 
 	err = s.dataStore.Delete(key)
 	if err != nil {
-		return fmt.Errorf("failed to delete object's data: %w", err)
+		return fmt.Errorf("failed to delete record: %w", err)
 	}
 
 	return nil
@@ -156,31 +157,31 @@ func (s *Instance[T, PT]) onDelete(key []byte) error {
 	return nil
 }
 
-// Get gets an object given it's key.
+// Get implements the badgerutils.StoreInstance interface.
 func (s *Instance[T, PT]) Get(key []byte) (*T, error) {
 	return s.dataStore.Get(key)
 }
 
-// NewIterator creates a new iterator over the objects.
+// NewIterator implements the badgerutils.StoreInstance interface.
 func (s *Instance[T, PT]) NewIterator(opts badger.IteratorOptions) badgerutils.Iterator[[]byte, *T] {
 	return s.dataStore.NewIterator(opts)
 }
 
-// Set inserts the object into the store as a new object or updates an existing object
-func (s *Instance[T, PT]) Set(key []byte, obj *T) error {
-	return s.SetWithOptions(key, obj)
+// Set implements the badgerutils.StoreInstance interface.
+func (s *Instance[T, PT]) Set(key []byte, v *T) error {
+	return s.SetWithOptions(key, v)
 }
 
-// SetWithOptions inserts the object into the store as a new object or updates an existing object
-func (s *Instance[T, PT]) SetWithOptions(key []byte, obj *T, opts ...any) error {
-	err := s.onSet(key, obj, opts...)
+// SetWithOptions is a variant of Set that allows passing options to extensions.
+func (s *Instance[T, PT]) SetWithOptions(key []byte, v *T, opts ...any) error {
+	err := s.onSet(key, v, opts...)
 	if err != nil {
 		return err
 	}
 
-	err = s.dataStore.Set(key, obj)
+	err = s.dataStore.Set(key, v)
 	if err != nil {
-		return fmt.Errorf("failed to set object's data: %w", err)
+		return fmt.Errorf("failed to set record: %w", err)
 	}
 
 	return nil
@@ -193,7 +194,7 @@ func (s *Instance[T, PT]) onSet(key []byte, new *T, opts ...any) error {
 
 	old, err := s.dataStore.Get(key)
 	if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
-		return fmt.Errorf("failed to get object's data: %w", err)
+		return fmt.Errorf("failed to get record: %w", err)
 	}
 
 	ctx := context.Background()
@@ -210,7 +211,6 @@ func (s *Instance[T, PT]) onSet(key []byte, new *T, opts ...any) error {
 
 func filterOptions(name string, opts []any) []any {
 	var extOpts []any
-
 	for _, opt := range opts {
 		if so, ok := opt.(ExtOption); ok {
 			if so.extName == name {
@@ -219,7 +219,6 @@ func filterOptions(name string, opts []any) []any {
 				continue
 			}
 		}
-
 		extOpts = append(extOpts, opt)
 	}
 
@@ -242,7 +241,7 @@ type ManagerInstance[T any, PT sstore.PBS[T]] struct {
 	txn   *badger.Txn
 }
 
-// AddExtension adds an extension and feed it all the existing objects.
+// AddExtension adds an extension and feed it all the existing record.
 func (s *ManagerInstance[T, PT]) AddExtension(name string, ext Extension[T]) error {
 	if name == "" {
 		return errors.New("extension name cannot be empty")

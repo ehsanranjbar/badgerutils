@@ -69,7 +69,7 @@ func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[[]byte, indexing.
 	return iters.Slice([]indexing.Chunk{indexing.NewChunk(expr.NewBound(low, false), expr.NewBound(high, true))}), nil
 }
 
-func TestObjectStore(t *testing.T) {
+func TestStore(t *testing.T) {
 	ext := indexing.NewExtension(TestIndexer{})
 	store := extstore.New(
 		nil,
@@ -81,8 +81,8 @@ func TestObjectStore(t *testing.T) {
 	extIns := ins.GetExtension("test").(*indexing.ExtensionInstance[TestStruct])
 
 	var (
-		keys    = [][]byte{{1}, {2}, {3}}
-		objects = []*TestStruct{
+		keys   = [][]byte{{1}, {2}, {3}}
+		values = []*TestStruct{
 			{A: 1, B: "foo"},
 			{A: 2, B: "bar"},
 			{A: 3, B: "baz"},
@@ -90,7 +90,7 @@ func TestObjectStore(t *testing.T) {
 	)
 
 	for i, key := range keys {
-		err := ins.Set(key, objects[i])
+		err := ins.Set(key, values[i])
 		require.NoError(t, err)
 	}
 

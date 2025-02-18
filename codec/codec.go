@@ -37,7 +37,7 @@ func CodecFor[T any]() Codec[T] {
 		return any(uintCodec{}).(Codec[T])
 	case reflect.Uint64:
 		return any(uint64Codec{}).(Codec[T])
-	case reflect.Array, reflect.Slice:
+	case reflect.Slice:
 		if rt.Elem().Kind() == reflect.Uint8 {
 			return any(bytesCodec{}).(Codec[T])
 		}

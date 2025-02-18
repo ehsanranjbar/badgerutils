@@ -1,48 +1,40 @@
 package qlutil
 
 import (
-	"strings"
 	"time"
 
 	qlvalue "github.com/araddon/qlbridge/value"
 	"github.com/ehsanranjbar/badgerutils/schema"
 )
 
-// ObjectContextWrapper is a wrapper around an object that implements the qlbridge.ContextReader interface.
-type ObjectContextWrapper[I, D any] struct {
-	id        *I
+// ContextWrapper is a wrapper around a type that implements the qlbridge.ContextReader interface.
+type ContextWrapper[I, D any] struct {
+	id        I
 	data      D
-	metadata  map[string]any
 	extractor schema.PathExtractor[D]
 	flatter   schema.Flatter[D]
 }
 
-// NewObjectContextWrapper creates a new ObjectContextWrapper.
-func NewObjectContextWrapper[I, D any](
-	id *I,
+// NewContextWrapper creates a new ContextWrapper.
+func NewContextWrapper[I, D any](
+	id I,
 	data D,
-	metadata map[string]any,
 	extractor schema.PathExtractor[D],
 	flatter schema.Flatter[D],
-) *ObjectContextWrapper[I, D] {
-	return &ObjectContextWrapper[I, D]{
+) *ContextWrapper[I, D] {
+	return &ContextWrapper[I, D]{
 		id:        id,
 		data:      data,
-		metadata:  metadata,
 		extractor: extractor,
 		flatter:   flatter,
 	}
 }
 
 // Get implements the qlbridge.ContextReader interface.
-func (c *ObjectContextWrapper[I, D]) Get(key string) (qlvalue.Value, bool) {
+func (c *ContextWrapper[I, D]) Get(key string) (qlvalue.Value, bool) {
 	switch {
 	case key == "_id":
 		return qlvalue.NewValue(c.id), true
-	case strings.HasPrefix(key, "_metadata"):
-		// Assume nil on error.
-		v, _ := schema.ExtractPathFromAny(c.metadata, strings.TrimPrefix(key, "_metadata"))
-		return qlvalue.NewValue(v), true
 	default:
 		v, err := c.extractor.ExtractPath(c.data, key)
 		if err != nil {
@@ -54,7 +46,7 @@ func (c *ObjectContextWrapper[I, D]) Get(key string) (qlvalue.Value, bool) {
 
 // Row implements the qlbridge.ContextReader interface.
 // I don't know what this is supposed to do.
-func (c *ObjectContextWrapper[I, D]) Row() map[string]qlvalue.Value {
+func (c *ContextWrapper[I, D]) Row() map[string]qlvalue.Value {
 	if c.flatter == nil {
 		return nil
 	}
@@ -72,4 +64,4 @@ func (c *ObjectContextWrapper[I, D]) Row() map[string]qlvalue.Value {
 
 // Ts implements the qlbridge.ContextReader interface.
 // I don't know what this is supposed to do.
-func (c *ObjectContextWrapper[I, D]) Ts() time.Time { return time.Time{} }
+func (c *ContextWrapper[I, D]) Ts() time.Time { return time.Time{} }

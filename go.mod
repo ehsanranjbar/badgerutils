@@ -6,6 +6,7 @@ require (
 	github.com/RoaringBitmap/roaring/v2 v2.3.4
 	github.com/araddon/qlbridge v0.0.2
 	github.com/dgraph-io/badger/v4 v4.2.0
+	github.com/google/uuid v1.0.0
 	github.com/stretchr/testify v1.9.0
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	golang.org/x/exp v0.0.0-20250210185358-939b2ce775ac

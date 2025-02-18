@@ -47,7 +47,7 @@ func TestStore(t *testing.T) {
 
 	var (
 		keys    = [][]byte{{1}, {2}, {3}}
-		objects = []*TestStruct{
+		values = []*TestStruct{
 			{A: 1, B: "foo"},
 			{A: 2, B: "bar"},
 			{A: 3, B: "baz"},
@@ -63,7 +63,7 @@ func TestStore(t *testing.T) {
 
 	t.Run("Set", func(t *testing.T) {
 		for i, key := range keys {
-			err := ins.Set(key, objects[i])
+			err := ins.Set(key, values[i])
 			require.NoError(t, err)
 		}
 	})
@@ -72,7 +72,7 @@ func TestStore(t *testing.T) {
 		for i, key := range keys {
 			v, err := ins.Get(key)
 			require.NoError(t, err)
-			require.Equal(t, objects[i], v)
+			require.Equal(t, values[i], v)
 		}
 	})
 
@@ -83,7 +83,7 @@ func TestStore(t *testing.T) {
 		actual, err := iters.Collect(iter)
 		require.NoError(t, err)
 		require.Len(t, actual, len(keys))
-		require.Equal(t, objects, actual)
+		require.Equal(t, values, actual)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
