@@ -1,18 +1,20 @@
 package ext
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
+	"github.com/ehsanranjbar/badgerutils/internal/ordmap"
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
 )
 
 var (
-	dataStorePrefix = []byte("data")
-	extStorePrefix  = []byte("ext")
+	dataStorePrefix = []byte{0x00}
+	extStorePrefix  = []byte{0x01}
 )
 
 // Store is a store that executes hooks on object creation and deletion.
@@ -20,10 +22,9 @@ type Store[
 	T any,
 	PT sstore.PBS[T],
 ] struct {
-	dataStore *sstore.Store[T, PT]
+	dataStore badgerutils.Instantiator[badgerutils.StoreInstance[[]byte, *T, *T, badgerutils.Iterator[[]byte, *T]]]
 	extStore  *pstore.Store
-	exts      map[string]Extension[T]
-	extsOrder []string
+	exts      *ordmap.Map[string, Extension[T]]
 	prefix    []byte
 }
 
@@ -33,7 +34,7 @@ func New[
 	PT sstore.PBS[T],
 ](
 	base badgerutils.Instantiator[badgerutils.BadgerStore],
-	opts ...func(*Store[T, PT]),
+	opts ...func(*Store[T, PT]) error,
 ) *Store[T, PT] {
 	var prefix []byte
 	if pfx, ok := base.(prefixed); ok {
@@ -43,7 +44,7 @@ func New[
 	store := &Store[T, PT]{
 		dataStore: sstore.New[T, PT](pstore.New(base, dataStorePrefix)),
 		extStore:  pstore.New(base, extStorePrefix),
-		exts:      make(map[string]Extension[T]),
+		exts:      ordmap.New[string, Extension[T]](),
 		prefix:    prefix,
 	}
 	for _, opt := range opts {
@@ -58,14 +59,18 @@ type prefixed interface {
 }
 
 // WithExtension adds an extension to the store.
-func WithExtension[T any, PT sstore.PBS[T]](name string, ext Extension[T]) func(*Store[T, PT]) {
-	return func(s *Store[T, PT]) {
+func WithExtension[T any, PT sstore.PBS[T]](name string, ext Extension[T]) func(*Store[T, PT]) error {
+	return func(s *Store[T, PT]) error {
 		if sr, ok := ext.(StoreRegistry); ok {
 			sr.RegisterStore(pstore.New(s.extStore, []byte(name)))
 		}
 
-		s.exts[name] = ext
-		s.extsOrder = append(s.extsOrder, name)
+		err := s.exts.Add(name, ext)
+		if err != nil {
+			return fmt.Errorf("failed to add extension %s: %w", name, err)
+		}
+
+		return nil
 	}
 }
 
@@ -74,15 +79,14 @@ func (s *Store[T, PT]) Instantiate(txn *badger.Txn) *Instance[T, PT] {
 	return &Instance[T, PT]{
 		dataStore: s.dataStore.Instantiate(txn),
 		exts:      s.instantiateExts(txn),
-		extsOrder: s.extsOrder,
 		prefix:    s.prefix,
 	}
 }
 
-func (s *Store[T, PT]) instantiateExts(txn *badger.Txn) map[string]ExtensionInstance[T] {
-	exts := make(map[string]ExtensionInstance[T])
-	for _, name := range s.extsOrder {
-		exts[name] = s.exts[name].Instantiate(txn)
+func (s *Store[T, PT]) instantiateExts(txn *badger.Txn) *ordmap.Map[string, ExtensionInstance[T]] {
+	exts := ordmap.New[string, ExtensionInstance[T]]()
+	for name, ext := range s.exts.Iter() {
+		exts.Add(name, ext.Instantiate(txn))
 	}
 
 	return exts
@@ -90,7 +94,7 @@ func (s *Store[T, PT]) instantiateExts(txn *badger.Txn) map[string]ExtensionInst
 
 // GetExtension returns an extension by name.
 func (s *Store[T, PT]) GetExtension(name string) Extension[T] {
-	if ext, ok := s.exts[name]; ok {
+	if ext, ok := s.exts.Get(name); ok {
 		return ext
 	}
 
@@ -107,8 +111,7 @@ type Instance[
 	PT sstore.PBS[T],
 ] struct {
 	dataStore badgerutils.StoreInstance[[]byte, *T, *T, badgerutils.Iterator[[]byte, *T]]
-	exts      map[string]ExtensionInstance[T]
-	extsOrder []string
+	exts      *ordmap.Map[string, ExtensionInstance[T]]
 	prefix    []byte
 }
 
@@ -133,7 +136,7 @@ func (s *Instance[T, PT]) Delete(key []byte) error {
 }
 
 func (s *Instance[T, PT]) onDelete(key []byte) error {
-	if len(s.exts) == 0 {
+	if s.exts.Len() == 0 {
 		return nil
 	}
 
@@ -142,8 +145,9 @@ func (s *Instance[T, PT]) onDelete(key []byte) error {
 		return err
 	}
 
-	for _, name := range s.extsOrder {
-		err := s.exts[name].OnDelete(key, data)
+	ctx := context.Background()
+	for _, name := range s.exts.Iter() {
+		err := name.OnDelete(ctx, key, data)
 		if err != nil {
 			return fmt.Errorf("failure in running extension %s OnDelete: %w", name, err)
 		}
@@ -169,9 +173,9 @@ func (s *Instance[T, PT]) Set(key []byte, obj *T) error {
 
 // SetWithOptions inserts the object into the store as a new object or updates an existing object
 func (s *Instance[T, PT]) SetWithOptions(key []byte, obj *T, opts ...any) error {
-	old, err := s.dataStore.Get(key)
-	if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
-		return fmt.Errorf("failed to get object's data: %w", err)
+	err := s.onSet(key, obj, opts...)
+	if err != nil {
+		return err
 	}
 
 	err = s.dataStore.Set(key, obj)
@@ -179,22 +183,23 @@ func (s *Instance[T, PT]) SetWithOptions(key []byte, obj *T, opts ...any) error 
 		return fmt.Errorf("failed to set object's data: %w", err)
 	}
 
-	err = s.onSet(key, old, obj, opts...)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
-func (s *Instance[T, PT]) onSet(key []byte, old, new *T, opts ...any) error {
-	if len(s.exts) == 0 {
+func (s *Instance[T, PT]) onSet(key []byte, new *T, opts ...any) error {
+	if s.exts.Len() == 0 {
 		return nil
 	}
 
-	for _, name := range s.extsOrder {
+	old, err := s.dataStore.Get(key)
+	if err != nil && !errors.Is(err, badger.ErrKeyNotFound) {
+		return fmt.Errorf("failed to get object's data: %w", err)
+	}
+
+	ctx := context.Background()
+	for name, ext := range s.exts.Iter() {
 		extOpts := filterOptions(name, opts)
-		err := s.exts[name].OnSet(key, old, new, extOpts...)
+		err := ext.OnSet(ctx, key, old, new, extOpts...)
 		if err != nil {
 			return fmt.Errorf("failure in running extension %s OnSet: %w", name, err)
 		}
@@ -223,7 +228,7 @@ func filterOptions(name string, opts []any) []any {
 
 // GetExtension returns an extension's instance by name.
 func (s *Instance[T, PT]) GetExtension(name string) ExtensionInstance[T] {
-	if ext, ok := s.exts[name]; ok {
+	if ext, ok := s.exts.Get(name); ok {
 		return ext
 	}
 
@@ -242,8 +247,8 @@ func (s *ManagerInstance[T, PT]) AddExtension(name string, ext Extension[T]) err
 	if name == "" {
 		return errors.New("extension name cannot be empty")
 	}
-	if _, ok := s.store.exts[name]; ok {
-		return fmt.Errorf("an extension already registered with name %s", name)
+	if _, ok := s.exts.Get(name); ok {
+		return fmt.Errorf("extension with name %s already exists", name)
 	}
 
 	if sr, ok := ext.(StoreRegistry); ok {
@@ -259,13 +264,14 @@ func (s *ManagerInstance[T, PT]) AddExtension(name string, ext Extension[T]) err
 		if err != nil {
 			return fmt.Errorf("failed to initialize extension %s: %w", name, err)
 		}
-		err = extIns.OnSet(iter.Key(), nil, v, InitializationFlag{})
+		err = extIns.OnSet(context.Background(), iter.Key(), nil, v, InitializationFlag{})
 		if err != nil {
 			return fmt.Errorf("failed to initialize extension %s: %w", name, err)
 		}
 	}
 
-	s.store.exts[name] = ext
+	s.store.exts.Add(name, ext)
+	s.exts.Add(name, extIns)
 	return nil
 }
 
@@ -274,7 +280,7 @@ type InitializationFlag struct{}
 
 // DropExtension drops an extension.
 func (s *ManagerInstance[T, PT]) DropExtension(name string) error {
-	_, ok := s.store.exts[name]
+	_, ok := s.exts.Get(name)
 	if !ok {
 		return fmt.Errorf("extension %s not found", name)
 	}
@@ -285,7 +291,8 @@ func (s *ManagerInstance[T, PT]) DropExtension(name string) error {
 		return fmt.Errorf("failed to purge extension %s sub store: %w", name, err)
 	}
 
-	delete(s.exts, name)
+	s.store.exts.Delete(name)
+	s.exts.Delete(name)
 	return nil
 }
 
@@ -305,7 +312,7 @@ func dropStore(store badgerutils.BadgerStore) error {
 
 // DropAllExtensions drops all extensions.
 func (s *ManagerInstance[T, PT]) DropAllExtensions() error {
-	for name := range s.exts {
+	for name := range s.exts.Iter() {
 		err := s.DropExtension(name)
 		if err != nil {
 			return err
@@ -318,7 +325,7 @@ func (s *ManagerInstance[T, PT]) DropAllExtensions() error {
 // ListExtensions lists all extensions.
 func (s *ManagerInstance[T, PT]) ListExtensions() []string {
 	var names []string
-	for name := range s.exts {
+	for name := range s.exts.Iter() {
 		names = append(names, name)
 	}
 

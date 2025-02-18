@@ -2,6 +2,7 @@ package extutil
 
 import (
 	"bytes"
+	"context"
 	"encoding"
 	"time"
 
@@ -71,13 +72,13 @@ type AssociateStoreInstance[
 }
 
 // OnDelete implements the Extension interface.
-func (as *AssociateStoreInstance[T, U, PU]) OnDelete(key []byte, value *T) error {
+func (as *AssociateStoreInstance[T, U, PU]) OnDelete(_ context.Context, key []byte, value *T) error {
 	key = append(associateDataPrefix, key...)
 	return as.store.Delete(key)
 }
 
 // OnSet implements the Extension interface.
-func (as *AssociateStoreInstance[T, U, PU]) OnSet(key []byte, old, new *T, opts ...any) error {
+func (as *AssociateStoreInstance[T, U, PU]) OnSet(_ context.Context, key []byte, old, new *T, opts ...any) error {
 	opt, ok := findAs[AssociateData[U]](opts)
 	if ok {
 		return as.set(key, old, new, &opt.data)

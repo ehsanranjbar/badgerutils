@@ -1,6 +1,8 @@
 package indexing
 
 import (
+	"context"
+
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/store/ext"
@@ -42,7 +44,7 @@ type ExtensionInstance[T any] struct {
 }
 
 // OnDelete implements the extensible.Extension interface.
-func (e *ExtensionInstance[T]) OnDelete(key []byte, value *T) error {
+func (e *ExtensionInstance[T]) OnDelete(_ context.Context, key []byte, value *T) error {
 	kvs, err := e.ext.indexer.Index(value, false)
 	if err != nil {
 		return err
@@ -58,7 +60,7 @@ func (e *ExtensionInstance[T]) OnDelete(key []byte, value *T) error {
 }
 
 // OnSet implements the extensible.Extension interface.
-func (e *ExtensionInstance[T]) OnSet(key []byte, old, new *T, opts ...any) error {
+func (e *ExtensionInstance[T]) OnSet(_ context.Context, key []byte, old, new *T, opts ...any) error {
 	if old != nil {
 		kvs, err := e.ext.indexer.Index(old, false)
 		if err != nil {

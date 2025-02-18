@@ -1,6 +1,7 @@
 package extutil_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/ehsanranjbar/badgerutils/extutil"
@@ -22,7 +23,7 @@ func TestAssociateStore(t *testing.T) {
 	ins := as.Instantiate(txn).(*extutil.AssociateStoreInstance[struct{}, extutil.Metadata, *extutil.Metadata])
 
 	t.Run("OnSet", func(t *testing.T) {
-		err := ins.OnSet([]byte("key"), nil, &struct{}{})
+		err := ins.OnSet(context.Background(), []byte("key"), nil, &struct{}{})
 		require.NoError(t, err)
 		metadata, err := ins.Get([]byte("key"))
 		require.NoError(t, err)
@@ -30,7 +31,7 @@ func TestAssociateStore(t *testing.T) {
 		require.Contains(t, *metadata, "created_at")
 		require.Contains(t, *metadata, "updated_at")
 
-		err = ins.OnSet([]byte("key"), &struct{}{}, &struct{}{}, extutil.WithAssociateData(extutil.Metadata{"key": "value"}))
+		err = ins.OnSet(context.Background(), []byte("key"), &struct{}{}, &struct{}{}, extutil.WithAssociateData(extutil.Metadata{"key": "value"}))
 		require.NoError(t, err)
 		metadata, err = ins.Get([]byte("key"))
 		require.NoError(t, err)
@@ -41,7 +42,7 @@ func TestAssociateStore(t *testing.T) {
 	})
 
 	t.Run("DeleteMetadataKey", func(t *testing.T) {
-		err := ins.OnSet([]byte("key"), &struct{}{}, &struct{}{}, extutil.WithAssociateData(extutil.Metadata{"key": nil}))
+		err := ins.OnSet(context.Background(), []byte("key"), &struct{}{}, &struct{}{}, extutil.WithAssociateData(extutil.Metadata{"key": nil}))
 		require.NoError(t, err)
 		metadata, err := ins.Get([]byte("key"))
 		require.NoError(t, err)
@@ -52,7 +53,7 @@ func TestAssociateStore(t *testing.T) {
 	})
 
 	t.Run("OnDelete", func(t *testing.T) {
-		err := ins.OnDelete([]byte("key"), &struct{}{})
+		err := ins.OnDelete(context.Background(), []byte("key"), &struct{}{})
 		require.NoError(t, err)
 		metadata, err := ins.Get([]byte("key"))
 		require.NoError(t, err)

@@ -1,6 +1,8 @@
 package extutil
 
 import (
+	"context"
+
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
 	extstore "github.com/ehsanranjbar/badgerutils/store/ext"
@@ -42,11 +44,11 @@ type MapWrapperInstance[T, U any] struct {
 }
 
 // OnDelete implements the ExtensionInstance interface.
-func (mwi *MapWrapperInstance[T, U]) OnDelete(key []byte, value *T) error {
-	return mwi.base.OnDelete(key, mwi.m(value))
+func (mwi *MapWrapperInstance[T, U]) OnDelete(ctx context.Context, key []byte, value *T) error {
+	return mwi.base.OnDelete(ctx, key, mwi.m(value))
 }
 
 // OnSet implements the ExtensionInstance interface.
-func (mwi *MapWrapperInstance[T, U]) OnSet(key []byte, old, new *T, opts ...any) error {
-	return mwi.base.OnSet(key, mwi.m(old), mwi.m(new), opts...)
+func (mwi *MapWrapperInstance[T, U]) OnSet(ctx context.Context, key []byte, old, new *T, opts ...any) error {
+	return mwi.base.OnSet(ctx, key, mwi.m(old), mwi.m(new), opts...)
 }

@@ -101,7 +101,7 @@ func New[I, D any](
 		s.metadataFunc = extutil.MetadataSynthFunc[D, map[string]any](true)
 	}
 
-	exts := []func(*extstore.Store[Object[I, D], *Object[I, D]]){}
+	exts := []func(*extstore.Store[Object[I, D], *Object[I, D]]) error{}
 	for name, idx := range s.indexers {
 		extName := "idx/" + name
 		exts = append(
@@ -111,7 +111,7 @@ func New[I, D any](
 			})),
 		)
 	}
-	s.base = extstore.New[Object[I, D], *Object[I, D]](base, exts...)
+	s.base = extstore.New(base, exts...)
 
 	if s.extractor == nil {
 		s.extractor = schema.NewReflectPathExtractor[*D](true)
@@ -139,7 +139,8 @@ func WithSeqAsIdFunc[I constraints.Integer, D any](
 			if err != nil {
 				return 0, fmt.Errorf("failed to generate id: %w", err)
 			}
-			return I(id), nil
+			// badger sequences start from 0, so we increment it by 1.
+			return I(id + 1), nil
 		}
 	}
 }
