@@ -5,6 +5,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// SetId implements estore.Entity
+func (msg *Pet) SetId(id int64) {
+	msg.Id = id
+}
+
 // MarshalBinary implements encoding.BinaryMarshaler
 func (msg *Pet) MarshalBinary() ([]byte, error) {
 	return proto.Marshal(msg)

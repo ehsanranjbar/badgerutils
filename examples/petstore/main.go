@@ -11,9 +11,10 @@ import (
 	"time"
 
 	badger "github.com/dgraph-io/badger/v4"
+	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/examples/petstore/types"
 	"github.com/ehsanranjbar/badgerutils/iters"
-	objstore "github.com/ehsanranjbar/badgerutils/store/object"
+	estore "github.com/ehsanranjbar/badgerutils/store/entity"
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 	echo "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -21,8 +22,7 @@ import (
 
 var (
 	db             *badger.DB
-	petsIdSequence *badger.Sequence
-	petsRepository *objstore.Store[int64, types.Pet]
+	petsRepository *estore.Store[int64, types.Pet, *types.Pet]
 )
 
 func main() {
@@ -33,22 +33,20 @@ func main() {
 	}
 	defer db.Close()
 
-	petsIdSequence, err = db.GetSequence([]byte("seqs/pets"), 10)
+	reg, err := badgerutils.NewNameRegistry(db)
+	if err != nil {
+		panic(err)
+	}
+
+	petsIdSequence, err := db.GetSequence(reg.MustName("seqs/pets"), 10)
 	if err != nil {
 		panic(err)
 	}
 	defer petsIdSequence.Release()
 
-	petsRepository, err = objstore.New(
-		pstore.New(nil, []byte("pets")),
-		objstore.WithIdFunc(func(_ *types.Pet) (int64, error) {
-			id, err := petsIdSequence.Next()
-			if err != nil {
-				return 0, fmt.Errorf("failed to generate id: %w", err)
-			}
-
-			return int64(id + 1), nil
-		}),
+	petsRepository, err = estore.New(
+		pstore.New(nil, reg.MustName("pets")),
+		estore.WithSeqAsIdFunc[int64, types.Pet](petsIdSequence),
 	)
 	if err != nil {
 		panic(err)
@@ -84,11 +82,12 @@ func addPet(c echo.Context) error {
 	if err := c.Bind(&p); err != nil {
 		return err
 	}
+	// Ensure that the id is not set
+	p.Id = 0
 
-	obj := &objstore.Object[int64, types.Pet]{Data: p}
 	err := db.Update(func(txn *badger.Txn) error {
 		repo := petsRepository.Instantiate(txn)
-		err := repo.SetObject(obj)
+		err := repo.Set(&p)
 		if err != nil {
 			return err
 		}
@@ -99,9 +98,7 @@ func addPet(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Errorf("failed to create pet: %w", err))
 	}
 
-	obj.Data.Id = *obj.Id
-
-	return c.JSON(http.StatusCreated, obj)
+	return c.JSON(http.StatusCreated, &p)
 }
 
 func getPet(c echo.Context) error {
@@ -110,10 +107,10 @@ func getPet(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, fmt.Errorf("failed to parse id: %w", err))
 	}
 
-	var obj *objstore.Object[int64, types.Pet]
+	var p *types.Pet
 	err = db.View(func(txn *badger.Txn) error {
 		repo := petsRepository.Instantiate(txn)
-		obj, err = repo.GetObject(id)
+		p, err = repo.Get(id)
 		return err
 	})
 	if errors.Is(err, badger.ErrKeyNotFound) {
@@ -123,9 +120,7 @@ func getPet(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Errorf("failed to get pet: %w", err))
 	}
 
-	obj.Data.Id = *obj.Id
-
-	return c.JSON(http.StatusOK, obj)
+	return c.JSON(http.StatusOK, p)
 }
 
 func getPets(c echo.Context) error {
@@ -141,18 +136,12 @@ func getPets(c echo.Context) error {
 	var pets []*types.Pet
 	err = db.View(func(txn *badger.Txn) error {
 		repo := petsRepository.Instantiate(txn)
-		it := iters.Map(
-			iters.Limit(
-				iters.SkipN(
-					repo.NewIterator(badger.DefaultIteratorOptions),
-					int(offset),
-				),
-				int(limit),
+		it := iters.Limit(
+			iters.SkipN(
+				repo.NewIterator(badger.DefaultIteratorOptions),
+				int(offset),
 			),
-			func(obj *objstore.Object[int64, types.Pet], _ *badger.Item) (*types.Pet, error) {
-				obj.Data.Id = *obj.Id
-				return &obj.Data, nil
-			},
+			int(limit),
 		)
 		defer it.Close()
 		pets, err = iters.Collect(it)

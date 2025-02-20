@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/dgraph-io/badger/v4 v4.5.1
-	github.com/ehsanranjbar/badgerutils v0.0.0-20250214231947-c2dd1731a0d1
+	github.com/ehsanranjbar/badgerutils v0.0.0-20250218161849-e3198703fcb7
 	github.com/labstack/echo/v4 v4.13.3
 	google.golang.org/protobuf v1.36.5
 )
