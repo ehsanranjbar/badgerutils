@@ -70,11 +70,8 @@ func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[[]byte, indexing.
 }
 
 func TestStore(t *testing.T) {
-	ext := indexing.NewExtension(TestIndexer{})
-	store := extstore.New(
-		nil,
-		extstore.WithExtension("test", ext),
-	)
+	store := extstore.New[TestStruct](nil).
+		WithExtension("test", indexing.NewExtension(TestIndexer{}))
 
 	txn := testutil.PrepareTxn(t, true)
 	ins := store.Instantiate(txn)

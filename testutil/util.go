@@ -22,3 +22,21 @@ func PrepareTxn(t testing.TB, update bool) *badger.Txn {
 	})
 	return txn
 }
+
+// Dump reads all key-value pairs from a transaction and returns them as a map.
+func Dump(txn *badger.Txn) map[string]string {
+	result := make(map[string]string)
+	it := txn.NewIterator(badger.DefaultIteratorOptions)
+	defer it.Close()
+
+	for it.Rewind(); it.Valid(); it.Next() {
+		item := it.Item()
+		k := string(item.Key())
+		v, err := item.ValueCopy(nil)
+		if err != nil {
+			panic(err)
+		}
+		result[k] = string(v)
+	}
+	return result
+}

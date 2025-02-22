@@ -12,30 +12,26 @@ import (
 )
 
 func TestStore(t *testing.T) {
-	store, err := estore.New[uuid.UUID, estore.Object[uuid.UUID, testutil.TestStruct]](nil)
-	require.NoError(t, err)
+	store := estore.New[uuid.UUID, estore.Object[uuid.UUID, testutil.SampleStruct]](nil)
 
 	txn := testutil.PrepareTxn(t, true)
 	ins := store.Instantiate(txn)
 
 	t.Run("SetWithZeroId", func(t *testing.T) {
-		err := ins.Set(estore.NewObject[uuid.UUID](testutil.TestStruct{B: "foo"}))
+		err := ins.Set(estore.NewObject[uuid.UUID](testutil.SampleStruct{B: "foo"}))
 		require.Error(t, err)
 	})
 
-	store, err = estore.New(
-		nil,
-		estore.WithIdFunc(func(ـ *estore.Object[uuid.UUID, testutil.TestStruct]) (uuid.UUID, error) {
-			return uuid.NewRandom()
-		}),
-	)
-	require.NoError(t, err)
+	store = estore.New[uuid.UUID, estore.Object[uuid.UUID, testutil.SampleStruct]](nil).
+		WithIdFunc(func(_ *estore.Object[uuid.UUID, testutil.SampleStruct]) (uuid.UUID, error) {
+			return uuid.New(), nil
+		})
 
 	ins = store.Instantiate(txn)
 	var (
-		e1 = estore.NewObjectWithId(uuid.New(), testutil.TestStruct{B: "foo"})
-		e2 = estore.NewObjectWithId(uuid.New(), testutil.TestStruct{B: "bar"})
-		e3 = estore.NewObject[uuid.UUID](testutil.TestStruct{B: "baz"})
+		e1 = estore.NewObjectWithId(uuid.New(), testutil.SampleStruct{B: "foo"})
+		e2 = estore.NewObjectWithId(uuid.New(), testutil.SampleStruct{B: "bar"})
+		e3 = estore.NewObject[uuid.UUID](testutil.SampleStruct{B: "baz"})
 	)
 
 	t.Run("NotFound", func(t *testing.T) {

@@ -2,6 +2,7 @@ package entity
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/araddon/qlbridge/expr"
 	qlvm "github.com/araddon/qlbridge/vm"
@@ -33,10 +34,11 @@ type Store[
 	base          *extstore.Store[T, PT]
 	idFunc        func(*T) (I, error)
 	idCodec       codec.Codec[I]
-	exts          map[string]extstore.Extension[T]
 	indexers      map[string]*indexing.Extension[T]
 	extractor     schema.PathExtractor[*T]
 	flatExtractor schema.PathExtractor[[]byte]
+	initialized   bool
+	init          sync.Once
 }
 
 // New creates a new Store.
@@ -46,151 +48,96 @@ func New[
 	PT Entity[I, T],
 ](
 	base badgerutils.Instantiator[badgerutils.BadgerStore],
-	opts ...func(*Store[I, T, PT]),
-) (*Store[I, T, PT], error) {
-	s := &Store[I, T, PT]{
-		indexers: map[string]*indexing.Extension[T]{},
+) *Store[I, T, PT] {
+	return &Store[I, T, PT]{
+		base:      extstore.New[T, PT](base),
+		idCodec:   codec.CodecFor[I](),
+		indexers:  map[string]*indexing.Extension[T]{},
+		extractor: schema.NewReflectPathExtractor[*T](true),
 	}
-	for _, opt := range opts {
-		opt(s)
-	}
-
-	if s.idCodec == nil {
-		s.idCodec = codec.CodecFor[I]()
-		if s.idCodec == nil {
-			panic("no codec for id")
-		}
-	}
-
-	extOpts := []func(*extstore.Store[T, PT]) error{}
-	for name, ext := range s.exts {
-		extOpts = append(
-			extOpts,
-			extstore.WithExtension[T, PT](name, ext),
-		)
-	}
-	for name, idx := range s.indexers {
-		extName := "idx/" + name
-		extOpts = append(
-			extOpts,
-			extstore.WithExtension[T, PT](extName, idx),
-		)
-	}
-	s.base = extstore.New(base, extOpts...)
-
-	if s.extractor == nil {
-		s.extractor = schema.NewReflectPathExtractor[*T](true)
-	}
-
-	return s, nil
 }
 
 // WithIdFunc is an option to set the id function.
-func WithIdFunc[
-	I comparable,
-	T any,
-	PT Entity[I, T],
-](
-	f func(*T) (I, error),
-) func(*Store[I, T, PT]) {
-	return func(s *Store[I, T, PT]) {
-		s.idFunc = f
+func (s *Store[I, T, PT]) WithIdFunc(f func(*T) (I, error)) *Store[I, T, PT] {
+	if s.initialized {
+		panic("store already initialized")
 	}
+
+	s.idFunc = f
+	return s
 }
 
-// WithSeqAsIdFunc is an option to set the id function to use a sequence.
-func WithSeqAsIdFunc[
+// WithSequenceAsIdFunc is an option to set the id function to use a sequence.
+func WithSequenceAsIdFunc[
 	I constraints.Integer,
 	T any,
-	PT Entity[I, T],
 ](
 	seq *badger.Sequence,
-) func(*Store[I, T, PT]) {
-	return func(s *Store[I, T, PT]) {
-		s.idFunc = func(_ *T) (I, error) {
-			id, err := seq.Next()
-			if err != nil {
-				return 0, fmt.Errorf("failed to generate id: %w", err)
-			}
-			// badger sequences start from 0, so we increment it by 1.
-			return I(id + 1), nil
+) func(_ *T) (I, error) {
+	return func(_ *T) (I, error) {
+		id, err := seq.Next()
+		if err != nil {
+			return 0, fmt.Errorf("failed to generate id: %w", err)
 		}
+		// badger sequences start from 0, so we increment it by 1.
+		return I(id + 1), nil
 	}
 }
 
 // WithIdCodec is an option to set the id codec.
-func WithIdCodec[
-	I comparable,
-	T any,
-	PT Entity[I, T],
-](
-	c codec.Codec[I],
-) func(*Store[I, T, PT]) {
-	return func(s *Store[I, T, PT]) {
-		s.idCodec = c
+func (s *Store[I, T, PT]) WithIdCodec(c codec.Codec[I]) *Store[I, T, PT] {
+	if s.initialized {
+		panic("store already initialized")
 	}
-}
 
-// WithIndexer is an option to add an indexer.
-func WithIndexer[
-	I comparable,
-	T any,
-	PT Entity[I, T],
-](
-	name string,
-	idx indexing.Indexer[T],
-) func(*Store[I, T, PT]) {
-	return func(s *Store[I, T, PT]) {
-		if _, ok := s.indexers[name]; ok {
-			panic("indexer already exists")
-		}
-
-		s.indexers[name] = indexing.NewExtension(idx).(*indexing.Extension[T])
-	}
-}
-
-// WithExtension is an option to add an extension.
-func WithExtension[
-	I comparable,
-	T any,
-	PT Entity[I, T],
-](
-	name string,
-	ext *indexing.Extension[T],
-) func(*Store[I, T, PT]) {
-	return func(s *Store[I, T, PT]) {
-		if _, ok := s.exts[name]; ok {
-			panic("extension already exists")
-		}
-
-		s.exts[name] = ext
-	}
+	s.idCodec = c
+	return s
 }
 
 // WithExtractor is an option to set the extractor.
-func WithExtractor[
-	I comparable,
-	T any,
-	PT Entity[I, T],
-](
-	e schema.PathExtractor[*T],
-) func(*Store[I, T, PT]) {
-	return func(s *Store[I, T, PT]) {
-		s.extractor = e
+func (s *Store[I, T, PT]) WithExtractor(e schema.PathExtractor[*T]) *Store[I, T, PT] {
+	if s.initialized {
+		panic("store already initialized")
 	}
+
+	s.extractor = e
+	return s
 }
 
 // WithFlatExtractor is an option to set the flat extractor.
-func WithFlatExtractor[
-	I comparable,
-	T any,
-	PT Entity[I, T],
-](
-	e schema.PathExtractor[[]byte],
-) func(*Store[I, T, PT]) {
-	return func(s *Store[I, T, PT]) {
-		s.flatExtractor = e
+func (s *Store[I, T, PT]) WithFlatExtractor(e schema.PathExtractor[[]byte]) *Store[I, T, PT] {
+	if s.initialized {
+		panic("store already initialized")
 	}
+
+	s.flatExtractor = e
+	return s
+}
+
+// WithIndexer adds an indexer to the store.
+func (s *Store[I, T, PT]) WithIndexer(name string, idx indexing.Indexer[T]) *Store[I, T, PT] {
+	if s.initialized {
+		panic("store already initialized")
+	}
+
+	if _, ok := s.indexers[name]; ok {
+		panic("indexer already exists")
+	}
+
+	ext := indexing.NewExtension(idx).(*indexing.Extension[T])
+	s.base.WithExtension(name, ext)
+	s.indexers[name] = ext
+	return s
+}
+
+// WithExtension adds an extension to the store.
+func (s *Store[I, T, PT]) WithExtension(name string, ext extstore.Extension[T]) *Store[I, T, PT] {
+	if s.initialized {
+		panic("store already initialized")
+	}
+
+	s.base.WithExtension(name, ext)
+	return s
 }
 
 // Prefix returns the prefix of the store.
@@ -200,12 +147,30 @@ func (s *Store[I, T, PT]) Prefix() []byte {
 
 // Instantiate implements the badgerutils.Instantiator interface.
 func (s *Store[I, T, PT]) Instantiate(txn *badger.Txn) *Instance[I, T, PT] {
+	// Locking any changes to the store's configuration on first instantiation.
+	s.init.Do(func() {
+		if s.idCodec == nil {
+			panic("no codec for id")
+		}
+
+		if s.extractor == nil {
+			panic("no extractor")
+		}
+
+		s.initialized = true
+	})
+
 	return &Instance[I, T, PT]{
 		base:      s.base.Instantiate(txn),
 		idFunc:    s.idFunc,
 		idCodec:   s.idCodec,
 		extractor: s.extractor,
 	}
+}
+
+// IdCodec returns the id codec.
+func (s *Store[I, T, PT]) IdCodec() codec.Codec[I] {
+	return s.idCodec
 }
 
 // Indexer returns the indexer with given name.

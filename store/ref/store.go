@@ -1,6 +1,7 @@
 package ref
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 
@@ -91,7 +92,7 @@ func (s *Instance) Delete(prefix []byte) error {
 	defer iter.Close()
 
 	for iter.Rewind(); iter.Valid(); iter.Next() {
-		err := s.base.Delete(iter.Item().Key())
+		err := s.base.Delete(bytes.TrimPrefix(iter.Item().Key(), s.prefix))
 		if err != nil {
 			return err
 		}
@@ -139,8 +140,8 @@ func (s *Instance) Set(key []byte, e RefEntry) error {
 // NewIterator creates a new reference iterator
 func (s *Instance) NewIterator(opts badger.IteratorOptions) badgerutils.Iterator[[]byte, []byte] {
 	var iter badgerutils.BadgerIterator = s.base.NewIterator(opts)
-	if pfx := s.Prefix(); pfx != nil {
-		iter = pstore.NewIterator(iter, pfx)
+	if s.prefix != nil {
+		iter = pstore.NewIterator(iter, s.prefix)
 	}
 
 	return newIterator(iter)

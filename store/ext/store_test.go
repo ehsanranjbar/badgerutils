@@ -37,16 +37,18 @@ func (i TestIndexer) Lookup(args ...any) (badgerutils.Iterator[[]byte, indexing.
 }
 
 func TestStore(t *testing.T) {
-	store := extstore.New(
-		nil,
-		extstore.WithExtension("test", indexing.NewExtension(TestIndexer{})),
-	)
+	store := extstore.New[TestStruct](nil).
+		WithExtension("test", indexing.NewExtension(TestIndexer{}))
 
 	txn := testutil.PrepareTxn(t, true)
 	ins := store.Instantiate(txn)
 
+	require.Panics(t, func() {
+		store.WithExtension("test", indexing.NewExtension(TestIndexer{}))
+	})
+
 	var (
-		keys    = [][]byte{{1}, {2}, {3}}
+		keys   = [][]byte{{1}, {2}, {3}}
 		values = []*TestStruct{
 			{A: 1, B: "foo"},
 			{A: 2, B: "bar"},

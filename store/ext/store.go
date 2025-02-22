@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
@@ -13,8 +14,8 @@ import (
 )
 
 var (
-	dataStorePrefix = []byte{0x00}
-	extStorePrefix  = []byte{0x01}
+	dataStorePrefix = []byte{'d'}
+	extStorePrefix  = []byte{'x'}
 )
 
 // Store is a wrapper around a serialized store with an ordered list of extensions
@@ -23,20 +24,19 @@ type Store[
 	T any,
 	PT sstore.PBS[T],
 ] struct {
-	dataStore badgerutils.Instantiator[badgerutils.StoreInstance[[]byte, *T, *T, badgerutils.Iterator[[]byte, *T]]]
-	extStore  *pstore.Store
-	exts      *ordmap.Map[string, Extension[T]]
-	prefix    []byte
+	dataStore   badgerutils.Instantiator[badgerutils.StoreInstance[[]byte, *T, *T, badgerutils.Iterator[[]byte, *T]]]
+	extStore    *pstore.Store
+	exts        *ordmap.Map[string, Extension[T]]
+	prefix      []byte
+	initialized bool
+	init        sync.Once
 }
 
 // New creates a new Store.
 func New[
 	T any,
 	PT sstore.PBS[T],
-](
-	base badgerutils.Instantiator[badgerutils.BadgerStore],
-	opts ...func(*Store[T, PT]) error,
-) *Store[T, PT] {
+](base badgerutils.Instantiator[badgerutils.BadgerStore]) *Store[T, PT] {
 	var prefix []byte
 	if pfx, ok := base.(prefixed); ok {
 		prefix = pfx.Prefix()
@@ -48,9 +48,6 @@ func New[
 		exts:      ordmap.New[string, Extension[T]](),
 		prefix:    prefix,
 	}
-	for _, opt := range opts {
-		opt(store)
-	}
 
 	return store
 }
@@ -60,23 +57,30 @@ type prefixed interface {
 }
 
 // WithExtension adds an extension to the store.
-func WithExtension[T any, PT sstore.PBS[T]](name string, ext Extension[T]) func(*Store[T, PT]) error {
-	return func(s *Store[T, PT]) error {
-		if sr, ok := ext.(StoreRegistry); ok {
-			sr.RegisterStore(pstore.New(s.extStore, []byte(name)))
-		}
-
-		err := s.exts.Add(name, ext)
-		if err != nil {
-			return fmt.Errorf("failed to add extension %s: %w", name, err)
-		}
-
-		return nil
+func (s *Store[T, PT]) WithExtension(name string, ext Extension[T]) *Store[T, PT] {
+	if s.initialized {
+		panic("store is already initialized")
 	}
+
+	if sr, ok := ext.(StoreRegistry); ok {
+		sr.RegisterStore(pstore.New(s.extStore, []byte(name)))
+	}
+
+	err := s.exts.Add(name, ext)
+	if err != nil {
+		panic("extension with the same name already exists")
+	}
+
+	return s
 }
 
 // Instantiate creates a new Instance.
 func (s *Store[T, PT]) Instantiate(txn *badger.Txn) *Instance[T, PT] {
+	// Locking any changes to the store's configuration on first instantiation.
+	s.init.Do(func() {
+		s.initialized = true
+	})
+
 	return &Instance[T, PT]{
 		dataStore: s.dataStore.Instantiate(txn),
 		exts:      s.instantiateExts(txn),
@@ -219,7 +223,6 @@ func filterOptions(name string, opts []any) []any {
 				continue
 			}
 		}
-		extOpts = append(extOpts, opt)
 	}
 
 	return extOpts
@@ -232,101 +235,4 @@ func (s *Instance[T, PT]) GetExtension(name string) ExtensionInstance[T] {
 	}
 
 	return nil
-}
-
-// ManagerInstance is an instance of the store that can manage extensions which typically is used in migrations.
-type ManagerInstance[T any, PT sstore.PBS[T]] struct {
-	*Instance[T, PT]
-	store *Store[T, PT]
-	txn   *badger.Txn
-}
-
-// AddExtension adds an extension and feed it all the existing record.
-func (s *ManagerInstance[T, PT]) AddExtension(name string, ext Extension[T]) error {
-	if name == "" {
-		return errors.New("extension name cannot be empty")
-	}
-	if _, ok := s.exts.Get(name); ok {
-		return fmt.Errorf("extension with name %s already exists", name)
-	}
-
-	if sr, ok := ext.(StoreRegistry); ok {
-		es := pstore.New(s.store.extStore, []byte(name))
-		sr.RegisterStore(es)
-	}
-
-	iter := s.dataStore.NewIterator(badger.IteratorOptions{})
-	defer iter.Close()
-	extIns := ext.Instantiate(s.txn)
-	for iter.Rewind(); iter.Valid(); iter.Next() {
-		v, err := iter.Value()
-		if err != nil {
-			return fmt.Errorf("failed to initialize extension %s: %w", name, err)
-		}
-		err = extIns.OnSet(context.Background(), iter.Key(), nil, v, InitializationFlag{})
-		if err != nil {
-			return fmt.Errorf("failed to initialize extension %s: %w", name, err)
-		}
-	}
-
-	s.store.exts.Add(name, ext)
-	s.exts.Add(name, extIns)
-	return nil
-}
-
-// InitializationFlag is a flag that is passed to extensions to indicate that the extension is being initialized.
-type InitializationFlag struct{}
-
-// DropExtension drops an extension.
-func (s *ManagerInstance[T, PT]) DropExtension(name string) error {
-	_, ok := s.exts.Get(name)
-	if !ok {
-		return fmt.Errorf("extension %s not found", name)
-	}
-
-	es := pstore.New(s.store.extStore, []byte(name)).Instantiate(s.txn)
-	err := dropStore(es)
-	if err != nil {
-		return fmt.Errorf("failed to purge extension %s sub store: %w", name, err)
-	}
-
-	s.store.exts.Delete(name)
-	s.exts.Delete(name)
-	return nil
-}
-
-func dropStore(store badgerutils.BadgerStore) error {
-	iter := pstore.NewIteratorFromStore(store)
-	defer iter.Close()
-
-	for iter.Rewind(); iter.Valid(); iter.Next() {
-		err := store.Delete(iter.Key())
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// DropAllExtensions drops all extensions.
-func (s *ManagerInstance[T, PT]) DropAllExtensions() error {
-	for name := range s.exts.Iter() {
-		err := s.DropExtension(name)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// ListExtensions lists all extensions.
-func (s *ManagerInstance[T, PT]) ListExtensions() []string {
-	var names []string
-	for name := range s.exts.Iter() {
-		names = append(names, name)
-	}
-
-	return names
 }
