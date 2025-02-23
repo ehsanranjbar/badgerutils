@@ -1,13 +1,13 @@
-package extutil_test
+package recutil_test
 
 import (
 	"testing"
 
 	badger "github.com/dgraph-io/badger/v4"
-	"github.com/ehsanranjbar/badgerutils/extutil"
 	"github.com/ehsanranjbar/badgerutils/iters"
-	advstore "github.com/ehsanranjbar/badgerutils/store/adv"
 	extstore "github.com/ehsanranjbar/badgerutils/store/ext"
+	recstore "github.com/ehsanranjbar/badgerutils/store/rec"
+	"github.com/ehsanranjbar/badgerutils/store/rec/recutil"
 	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/suite"
 )
@@ -15,11 +15,11 @@ import (
 type AssociateSuite struct {
 	suite.Suite
 	txn *badger.Txn
-	ps  *advstore.Store[int64, testutil.SampleEntity, *testutil.SampleEntity]
-	cs  *advstore.Store[int64, testutil.SampleEntity, *testutil.SampleEntity]
-	rel *extutil.Association[int64, testutil.SampleEntity, *testutil.SampleEntity, int64, testutil.SampleEntity, *testutil.SampleEntity]
-	psi *advstore.Instance[int64, testutil.SampleEntity, *testutil.SampleEntity]
-	csi *advstore.Instance[int64, testutil.SampleEntity, *testutil.SampleEntity]
+	ps  *recstore.Store[int64, testutil.SampleEntity, *testutil.SampleEntity]
+	cs  *recstore.Store[int64, testutil.SampleEntity, *testutil.SampleEntity]
+	rel *recutil.Association[int64, testutil.SampleEntity, *testutil.SampleEntity, int64, testutil.SampleEntity, *testutil.SampleEntity]
+	psi *recstore.Instance[int64, testutil.SampleEntity, *testutil.SampleEntity]
+	csi *recstore.Instance[int64, testutil.SampleEntity, *testutil.SampleEntity]
 }
 
 func TestAssociateSuite(t *testing.T) {
@@ -32,7 +32,7 @@ func (ts *AssociateSuite) SetupTest() {
 	ts.ps = testutil.NewEntityStore([]byte("p"))
 	ts.cs = testutil.NewEntityStore([]byte("c"))
 
-	ts.rel = extutil.Associate("p-c-rel", ts.ps, ts.cs)
+	ts.rel = recutil.Associate("p-c-rel", ts.ps, ts.cs)
 
 	ts.psi = ts.ps.Instantiate(ts.txn)
 	ts.csi = ts.cs.Instantiate(ts.txn)
@@ -131,7 +131,7 @@ func (ts *AssociateSuite) TestChildStore() {
 func (ts *AssociateSuite) TestPIDFunc() {
 	ps := testutil.NewEntityStore([]byte("g"))
 	cs := testutil.NewEntityStore([]byte("f"))
-	extutil.Associate("g-f-rel", ps, cs).WithPIDFunc(func(_ *testutil.SampleEntity) (int64, error) {
+	recutil.Associate("g-f-rel", ps, cs).WithPIDFunc(func(_ *testutil.SampleEntity) (int64, error) {
 		return 1, nil
 	})
 
@@ -172,7 +172,7 @@ func (ts *AssociateSuite) TestPIDFunc() {
 func (ts *AssociateSuite) TestAllowOrphans() {
 	ps := testutil.NewEntityStore([]byte("g"))
 	cs := testutil.NewEntityStore([]byte("f"))
-	extutil.Associate("g-f-rel", ps, cs).AllowOrphans()
+	recutil.Associate("g-f-rel", ps, cs).AllowOrphans()
 
 	c1 := testutil.NewSampleEntity("C1")
 
@@ -185,7 +185,7 @@ func (ts *AssociateSuite) TestAllowOrphans() {
 func (ts *AssociateSuite) TestInstance() {
 	ps := testutil.NewEntityStore([]byte("g"))
 	cs := testutil.NewEntityStore([]byte("f"))
-	rel := extutil.Associate("g-f-rel", ps, cs).AllowOrphans()
+	rel := recutil.Associate("g-f-rel", ps, cs).AllowOrphans()
 	ins := rel.Instantiate(ts.txn)
 
 	p1 := testutil.NewSampleEntity("P1")

@@ -1,4 +1,4 @@
-package adv
+package rec
 
 import (
 	"encoding"
@@ -19,6 +19,8 @@ import (
 )
 
 // Record is a model for something that is serializable and has an unique id assigned to it.
+// One thing to consider here is that the id is serialized as key in the store so there's no need to serialize it
+// as part of the value.
 type Record[I comparable, T any] interface {
 	*T
 	GetId() I

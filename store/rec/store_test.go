@@ -1,37 +1,37 @@
-package adv_test
+package rec_test
 
 import (
 	"testing"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils/iters"
-	advstore "github.com/ehsanranjbar/badgerutils/store/adv"
+	recstore "github.com/ehsanranjbar/badgerutils/store/rec"
 	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
 func TestStore(t *testing.T) {
-	store := advstore.New[uuid.UUID, advstore.Object[uuid.UUID, testutil.SampleStruct]](nil)
+	store := recstore.New[uuid.UUID, recstore.Object[uuid.UUID, testutil.SampleStruct]](nil)
 
 	txn := testutil.PrepareTxn(t, true)
 	ins := store.Instantiate(txn)
 
 	t.Run("SetWithZeroId", func(t *testing.T) {
-		err := ins.Set(advstore.NewObject[uuid.UUID](testutil.SampleStruct{B: "foo"}))
+		err := ins.Set(recstore.NewObject[uuid.UUID](testutil.SampleStruct{B: "foo"}))
 		require.Error(t, err)
 	})
 
-	store = advstore.New[uuid.UUID, advstore.Object[uuid.UUID, testutil.SampleStruct]](nil).
-		WithIdFunc(func(_ *advstore.Object[uuid.UUID, testutil.SampleStruct]) (uuid.UUID, error) {
+	store = recstore.New[uuid.UUID, recstore.Object[uuid.UUID, testutil.SampleStruct]](nil).
+		WithIdFunc(func(_ *recstore.Object[uuid.UUID, testutil.SampleStruct]) (uuid.UUID, error) {
 			return uuid.New(), nil
 		})
 
 	ins = store.Instantiate(txn)
 	var (
-		e1 = advstore.NewObjectWithId(uuid.New(), testutil.SampleStruct{B: "foo"})
-		e2 = advstore.NewObjectWithId(uuid.New(), testutil.SampleStruct{B: "bar"})
-		e3 = advstore.NewObject[uuid.UUID](testutil.SampleStruct{B: "baz"})
+		e1 = recstore.NewObjectWithId(uuid.New(), testutil.SampleStruct{B: "foo"})
+		e2 = recstore.NewObjectWithId(uuid.New(), testutil.SampleStruct{B: "bar"})
+		e3 = recstore.NewObject[uuid.UUID](testutil.SampleStruct{B: "baz"})
 	)
 
 	t.Run("NotFound", func(t *testing.T) {

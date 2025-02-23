@@ -3,8 +3,8 @@ package testutil
 import (
 	"encoding/json"
 
-	advstore "github.com/ehsanranjbar/badgerutils/store/adv"
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
+	recstore "github.com/ehsanranjbar/badgerutils/store/rec"
 )
 
 type SampleStruct struct {
@@ -53,9 +53,9 @@ func (t *SampleEntity) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, t)
 }
 
-func NewEntityStore(prefix []byte) *advstore.Store[int64, SampleEntity, *SampleEntity] {
+func NewEntityStore(prefix []byte) *recstore.Store[int64, SampleEntity, *SampleEntity] {
 	var i int64
-	return advstore.New[int64, SampleEntity](pstore.New(nil, prefix)).
+	return recstore.New[int64, SampleEntity](pstore.New(nil, prefix)).
 		WithIdFunc(func(_ *SampleEntity) (int64, error) {
 			i++
 			return i, nil

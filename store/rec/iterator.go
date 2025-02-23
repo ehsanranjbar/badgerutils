@@ -1,4 +1,4 @@
-package adv
+package rec
 
 import (
 	badger "github.com/dgraph-io/badger/v4"

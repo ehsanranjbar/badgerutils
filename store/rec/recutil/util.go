@@ -1,4 +1,4 @@
-package extutil
+package recutil
 
 func findAs[T any](anys []any) []T {
 	var ts []T
