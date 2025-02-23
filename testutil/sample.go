@@ -3,7 +3,7 @@ package testutil
 import (
 	"encoding/json"
 
-	estore "github.com/ehsanranjbar/badgerutils/store/entity"
+	advstore "github.com/ehsanranjbar/badgerutils/store/adv"
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 )
 
@@ -53,9 +53,9 @@ func (t *SampleEntity) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, t)
 }
 
-func NewEntityStore(prefix []byte) *estore.Store[int64, SampleEntity, *SampleEntity] {
+func NewEntityStore(prefix []byte) *advstore.Store[int64, SampleEntity, *SampleEntity] {
 	var i int64
-	return estore.New[int64, SampleEntity](pstore.New(nil, prefix)).
+	return advstore.New[int64, SampleEntity](pstore.New(nil, prefix)).
 		WithIdFunc(func(_ *SampleEntity) (int64, error) {
 			i++
 			return i, nil

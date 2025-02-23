@@ -10,7 +10,7 @@ import (
 	"github.com/ehsanranjbar/badgerutils"
 	"github.com/ehsanranjbar/badgerutils/codec"
 	"github.com/ehsanranjbar/badgerutils/iters"
-	estore "github.com/ehsanranjbar/badgerutils/store/entity"
+	advstore "github.com/ehsanranjbar/badgerutils/store/adv"
 	extstore "github.com/ehsanranjbar/badgerutils/store/ext"
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
@@ -22,14 +22,14 @@ var dataStorePrefix = []byte{'d'}
 type Association[
 	PI comparable,
 	PT any,
-	PE estore.Entity[PI, PT],
+	PE advstore.Record[PI, PT],
 	CI comparable,
 	CT any,
-	CE estore.Entity[CI, CT],
+	CE advstore.Record[CI, CT],
 ] struct {
 	name         string
-	parentStore  *estore.Store[PI, PT, PE]
-	childStore   *estore.Store[CI, CT, CE]
+	parentStore  *advstore.Store[PI, PT, PE]
+	childStore   *advstore.Store[CI, CT, CE]
 	allowOrphans bool
 	pidFunc      func(*CT) (PI, error)
 	p2c          *refstore.Store
@@ -42,14 +42,14 @@ type Association[
 func Associate[
 	PI comparable,
 	PT any,
-	PE estore.Entity[PI, PT],
+	PE advstore.Record[PI, PT],
 	CI comparable,
 	CT any,
-	CE estore.Entity[CI, CT],
+	CE advstore.Record[CI, CT],
 ](
 	name string,
-	parentStore *estore.Store[PI, PT, PE],
-	childStore *estore.Store[CI, CT, CE],
+	parentStore *advstore.Store[PI, PT, PE],
+	childStore *advstore.Store[CI, CT, CE],
 ) *Association[PI, PT, PE, CI, CT, CE] {
 	asc := &Association[PI, PT, PE, CI, CT, CE]{
 		name:        name,
@@ -110,15 +110,15 @@ func (a *Association[PI, PT, PE, CI, CT, CE]) Instantiate(txn *badger.Txn) *Asso
 type AssociationInstance[
 	PI comparable,
 	PT any,
-	PE estore.Entity[PI, PT],
+	PE advstore.Record[PI, PT],
 	CI comparable,
 	CT any,
-	CE estore.Entity[CI, CT],
+	CE advstore.Record[CI, CT],
 ] struct {
 	name        string
-	parentStore *estore.Instance[PI, PT, PE]
+	parentStore *advstore.Instance[PI, PT, PE]
 	pidCodec    codec.Codec[PI]
-	childStore  *estore.Instance[CI, CT, CE]
+	childStore  *advstore.Instance[CI, CT, CE]
 	cidCodec    codec.Codec[CI]
 	pidFunc     func(*CT) (PI, error)
 	p2c         *refstore.Instance
@@ -213,10 +213,10 @@ func (a *AssociationInstance[PI, PT, PE, CI, CT, CE]) GetChildrenIterator(pid PI
 type associationPExt[
 	PI comparable,
 	PT any,
-	PE estore.Entity[PI, PT],
+	PE advstore.Record[PI, PT],
 	CI comparable,
 	CT any,
-	CE estore.Entity[CI, CT],
+	CE advstore.Record[CI, CT],
 ] struct {
 	asc *Association[PI, PT, PE, CI, CT, CE]
 }
@@ -241,14 +241,14 @@ func (e associationPExt[PI, PT, PE, CI, CT, CE]) RegisterStore(store badgerutils
 type associationPExtIns[
 	PI comparable,
 	PT any,
-	PE estore.Entity[PI, PT],
+	PE advstore.Record[PI, PT],
 	CI comparable,
 	CT any,
-	CE estore.Entity[CI, CT],
+	CE advstore.Record[CI, CT],
 ] struct {
 	name       string
 	cidCodec   codec.Codec[CI]
-	childStore *estore.Instance[CI, CT, CE]
+	childStore *advstore.Instance[CI, CT, CE]
 	p2c        *refstore.Instance
 }
 
@@ -297,10 +297,10 @@ type associationPIDSkipCheckFlag struct{}
 type associationCExt[
 	PI comparable,
 	PT any,
-	PE estore.Entity[PI, PT],
+	PE advstore.Record[PI, PT],
 	CI comparable,
 	CT any,
-	CE estore.Entity[CI, CT],
+	CE advstore.Record[CI, CT],
 ] struct {
 	asc *Association[PI, PT, PE, CI, CT, CE]
 }
@@ -329,10 +329,10 @@ func (e associationCExt[PI, PT, PE, CI, CT, CE]) RegisterStore(store badgerutils
 type associationCExtIns[
 	PI comparable,
 	PT any,
-	PE estore.Entity[PI, PT],
+	PE advstore.Record[PI, PT],
 	CI comparable,
 	CT any,
-	CE estore.Entity[CI, CT],
+	CE advstore.Record[CI, CT],
 ] struct {
 	name        string
 	pidCodec    codec.Codec[PI]

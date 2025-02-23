@@ -1,6 +1,7 @@
-package entity
+package adv
 
 import (
+	"encoding"
 	"fmt"
 	"sync"
 
@@ -14,22 +15,23 @@ import (
 	"github.com/ehsanranjbar/badgerutils/iters"
 	"github.com/ehsanranjbar/badgerutils/schema"
 	extstore "github.com/ehsanranjbar/badgerutils/store/ext"
-	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
 	"golang.org/x/exp/constraints"
 )
 
-// Entity is a model for something that is serializable and has an unique id assigned to it.
-type Entity[I comparable, T any] interface {
-	sstore.PBS[T]
+// Record is a model for something that is serializable and has an unique id assigned to it.
+type Record[I comparable, T any] interface {
+	*T
 	GetId() I
 	SetId(I)
+	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
 }
 
 // Store is a generic store for entities.
 type Store[
 	I comparable,
 	T any,
-	PT Entity[I, T],
+	PT Record[I, T],
 ] struct {
 	base          *extstore.Store[T, PT]
 	idFunc        func(*T) (I, error)
@@ -45,7 +47,7 @@ type Store[
 func New[
 	I comparable,
 	T any,
-	PT Entity[I, T],
+	PT Record[I, T],
 ](
 	base badgerutils.Instantiator[badgerutils.BadgerStore],
 ) *Store[I, T, PT] {
@@ -187,7 +189,7 @@ func (s *Store[I, T, PT]) Indexer(name string) *indexing.Extension[T] {
 type Instance[
 	I comparable,
 	T any,
-	PT Entity[I, T],
+	PT Record[I, T],
 ] struct {
 	base      *extstore.Instance[T, PT]
 	idFunc    func(*T) (I, error)
@@ -212,12 +214,12 @@ func (s *Instance[I, T, PT]) Get(id I) (*T, error) {
 		return nil, err
 	}
 
-	e, err := s.base.Get(key)
+	r, err := s.base.Get(key)
 	if err != nil {
 		return nil, err
 	}
-	PT(e).SetId(id)
-	return e, nil
+	PT(r).SetId(id)
+	return r, nil
 }
 
 // NewIterator implements the badgerutils.StoreInstance interface.
@@ -258,8 +260,8 @@ func (s *Instance[I, T, PT]) Query(q string) (badgerutils.Iterator[I, *T], error
 
 	iter := iters.Filter(
 		s.NewIterator(badger.DefaultIteratorOptions),
-		func(e *T, item *badger.Item) bool {
-			ctx := qlutil.NewContextWrapper(PT(e).GetId(), e, s.extractor, nil)
+		func(r *T, item *badger.Item) bool {
+			ctx := qlutil.NewContextWrapper(PT(r).GetId(), r, s.extractor, nil)
 			t, _ := qlvm.MatchesExpr(ctx, qe)
 			return t
 		})

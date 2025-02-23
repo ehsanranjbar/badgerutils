@@ -1,4 +1,4 @@
-package entity
+package adv
 
 import (
 	badger "github.com/dgraph-io/badger/v4"

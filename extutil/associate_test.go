@@ -6,7 +6,7 @@ import (
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils/extutil"
 	"github.com/ehsanranjbar/badgerutils/iters"
-	estore "github.com/ehsanranjbar/badgerutils/store/entity"
+	advstore "github.com/ehsanranjbar/badgerutils/store/adv"
 	extstore "github.com/ehsanranjbar/badgerutils/store/ext"
 	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/suite"
@@ -15,11 +15,11 @@ import (
 type AssociateSuite struct {
 	suite.Suite
 	txn *badger.Txn
-	ps  *estore.Store[int64, testutil.SampleEntity, *testutil.SampleEntity]
-	cs  *estore.Store[int64, testutil.SampleEntity, *testutil.SampleEntity]
+	ps  *advstore.Store[int64, testutil.SampleEntity, *testutil.SampleEntity]
+	cs  *advstore.Store[int64, testutil.SampleEntity, *testutil.SampleEntity]
 	rel *extutil.Association[int64, testutil.SampleEntity, *testutil.SampleEntity, int64, testutil.SampleEntity, *testutil.SampleEntity]
-	psi *estore.Instance[int64, testutil.SampleEntity, *testutil.SampleEntity]
-	csi *estore.Instance[int64, testutil.SampleEntity, *testutil.SampleEntity]
+	psi *advstore.Instance[int64, testutil.SampleEntity, *testutil.SampleEntity]
+	csi *advstore.Instance[int64, testutil.SampleEntity, *testutil.SampleEntity]
 }
 
 func TestAssociateSuite(t *testing.T) {

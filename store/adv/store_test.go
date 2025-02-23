@@ -1,37 +1,37 @@
-package entity_test
+package adv_test
 
 import (
 	"testing"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils/iters"
-	estore "github.com/ehsanranjbar/badgerutils/store/entity"
+	advstore "github.com/ehsanranjbar/badgerutils/store/adv"
 	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
 func TestStore(t *testing.T) {
-	store := estore.New[uuid.UUID, estore.Object[uuid.UUID, testutil.SampleStruct]](nil)
+	store := advstore.New[uuid.UUID, advstore.Object[uuid.UUID, testutil.SampleStruct]](nil)
 
 	txn := testutil.PrepareTxn(t, true)
 	ins := store.Instantiate(txn)
 
 	t.Run("SetWithZeroId", func(t *testing.T) {
-		err := ins.Set(estore.NewObject[uuid.UUID](testutil.SampleStruct{B: "foo"}))
+		err := ins.Set(advstore.NewObject[uuid.UUID](testutil.SampleStruct{B: "foo"}))
 		require.Error(t, err)
 	})
 
-	store = estore.New[uuid.UUID, estore.Object[uuid.UUID, testutil.SampleStruct]](nil).
-		WithIdFunc(func(_ *estore.Object[uuid.UUID, testutil.SampleStruct]) (uuid.UUID, error) {
+	store = advstore.New[uuid.UUID, advstore.Object[uuid.UUID, testutil.SampleStruct]](nil).
+		WithIdFunc(func(_ *advstore.Object[uuid.UUID, testutil.SampleStruct]) (uuid.UUID, error) {
 			return uuid.New(), nil
 		})
 
 	ins = store.Instantiate(txn)
 	var (
-		e1 = estore.NewObjectWithId(uuid.New(), testutil.SampleStruct{B: "foo"})
-		e2 = estore.NewObjectWithId(uuid.New(), testutil.SampleStruct{B: "bar"})
-		e3 = estore.NewObject[uuid.UUID](testutil.SampleStruct{B: "baz"})
+		e1 = advstore.NewObjectWithId(uuid.New(), testutil.SampleStruct{B: "foo"})
+		e2 = advstore.NewObjectWithId(uuid.New(), testutil.SampleStruct{B: "bar"})
+		e3 = advstore.NewObject[uuid.UUID](testutil.SampleStruct{B: "baz"})
 	)
 
 	t.Run("NotFound", func(t *testing.T) {

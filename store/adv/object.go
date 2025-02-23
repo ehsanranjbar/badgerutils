@@ -1,4 +1,4 @@
-package entity
+package adv
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
-// Object is a generic object that can be stored in as an entity.
+// Object is a generic object that can be stored in as a Record.
 type Object[I comparable, D any] struct {
 	Id       I              `json:"id,omitempty"`
 	Data     D              `json:"data,omitempty"`
@@ -31,12 +31,12 @@ func NewObjectWithId[I comparable, D any](id I, data D) *Object[I, D] {
 	}
 }
 
-// GetId returns the object's Id.
+// GetId implements the Record interface.
 func (obj Object[I, D]) GetId() I {
 	return obj.Id
 }
 
-// SetId sets the object's Id.
+// SetId implements the Record interface.
 func (obj *Object[I, D]) SetId(id I) {
 	obj.Id = id
 }
