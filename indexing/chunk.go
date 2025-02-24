@@ -26,7 +26,7 @@ func LookupChunks(
 	opts badger.IteratorOptions,
 ) badgerutils.Iterator[[]byte, []byte] {
 	return iters.Flatten(
-		iters.Map(parts, func(_ []byte, p Chunk, _ *badger.Item) ([]byte, badgerutils.Iterator[[]byte, []byte], error) {
+		iters.Map(parts, func(c Chunk, _ *badger.Item) (badgerutils.Iterator[[]byte, []byte], error) {
 			// Omitting the prefix option.
 			iter := store.NewIterator(badger.IteratorOptions{
 				PrefetchSize:   opts.PrefetchSize,
@@ -41,58 +41,58 @@ func LookupChunks(
 				// Special case for reverse iteration with non-empty high bound that happens with reference stores
 				// Because we want to seek and sever base on prefixes instead of the actual keys.
 				var s []byte = nil
-				if !p.High().IsEmpty() {
-					s = p.High().Value()
+				if !c.High().IsEmpty() {
+					s = c.High().Value()
 
-					if !p.High().Exclusive() {
-						s = lex.Increment(bytes.Clone(p.High().Value()))
+					if !c.High().Exclusive() {
+						s = lex.Increment(bytes.Clone(c.High().Value()))
 					}
 				}
 				iter = iters.RewindSeek(iter, s)
 
-				if !p.High().IsEmpty() {
+				if !c.High().IsEmpty() {
 					iter = iters.Skip(iter, func(_ struct{}, key []byte, _ []byte, _ *badger.Item) (struct{}, bool) {
-						if p.High().Exclusive() {
-							return struct{}{}, bytes.Compare(key, p.High().Value()) >= 0
+						if c.High().Exclusive() {
+							return struct{}{}, bytes.Compare(key, c.High().Value()) >= 0
 						} else {
-							return struct{}{}, bytes.Compare(key, p.High().Value()) > 0
+							return struct{}{}, bytes.Compare(key, c.High().Value()) > 0
 						}
 					})
 				}
 			} else {
 				var e []byte = nil
-				if !p.Low().IsEmpty() {
-					e = p.Low().Value()
+				if !c.Low().IsEmpty() {
+					e = c.Low().Value()
 				}
 				iter = iters.RewindSeek(iter, e)
 
-				if !p.Low().IsEmpty() && p.Low().Exclusive() {
+				if !c.Low().IsEmpty() && c.Low().Exclusive() {
 					iter = iters.Skip(iter, func(_ struct{}, key []byte, _ []byte, _ *badger.Item) (struct{}, bool) {
-						return struct{}{}, bytes.Equal(key, p.Low().Value())
+						return struct{}{}, bytes.Equal(key, c.Low().Value())
 					})
 				}
 			}
 
-			return nil, iters.Sever(iter, func(key []byte, _ []byte, _ *badger.Item) bool {
+			return iters.Sever(iter, func(key []byte, _ []byte, _ *badger.Item) bool {
 				if opts.Reverse {
-					if p.Low().IsEmpty() {
+					if c.Low().IsEmpty() {
 						return false
 					}
 
-					if p.Low().Exclusive() {
-						return bytes.Compare(key, p.Low().Value()) <= 0
+					if c.Low().Exclusive() {
+						return bytes.Compare(key, c.Low().Value()) <= 0
 					} else {
-						return bytes.Compare(key, p.Low().Value()) < 0
+						return bytes.Compare(key, c.Low().Value()) < 0
 					}
 				} else {
-					if p.High().IsEmpty() {
+					if c.High().IsEmpty() {
 						return false
 					}
 
-					if p.High().Exclusive() {
-						return bytes.Compare(key, p.High().Value()) >= 0
+					if c.High().Exclusive() {
+						return bytes.Compare(key, c.High().Value()) >= 0
 					} else {
-						return bytes.Compare(key, p.High().Value()) > 0
+						return bytes.Compare(key, c.High().Value()) > 0
 					}
 				}
 			}), nil

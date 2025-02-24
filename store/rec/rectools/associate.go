@@ -196,13 +196,13 @@ func (a *AssociationInstance[PI, PT, PR, CI, CT, CR]) GetChildrenIterator(pid PI
 		a.childStore,
 		iters.Map(
 			a.p2c.NewIterator(opts),
-			func(_ []byte, k []byte, _ *badger.Item) ([]byte, CI, error) {
+			func(k []byte, _ *badger.Item) (CI, error) {
 				cid, err := a.cidCodec.Decode(k)
 				if err != nil {
-					return nil, cid, fmt.Errorf("failed to decode child id: %w", err)
+					return cid, fmt.Errorf("failed to decode child id: %w", err)
 				}
 
-				return nil, cid, nil
+				return cid, nil
 			},
 		),
 	)

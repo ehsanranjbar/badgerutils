@@ -52,8 +52,8 @@ func TestMap(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	iter := iters.Map(ins.NewIterator(badger.DefaultIteratorOptions), func(k []byte, v *StructA, _ *badger.Item) ([]byte, StructB, error) {
-		return k, StructB{B: strconv.Itoa(v.A)}, nil
+	iter := iters.Map(ins.NewIterator(badger.DefaultIteratorOptions), func(v *StructA, _ *badger.Item) (StructB, error) {
+		return StructB{B: strconv.Itoa(v.A)}, nil
 	})
 	defer iter.Close()
 
