@@ -10,9 +10,14 @@ import (
 func Lookup[IK, K, V any](
 	store Getter[K, V],
 	iter badgerutils.Iterator[IK, K],
-) *MapIterator[IK, K, *V] {
-	return Map(iter, func(k K, _ *badger.Item) (*V, error) {
-		return store.Get(k)
+) *MapIterator[IK, K, K, *V] {
+	return Map(iter, func(ik IK, k K, _ *badger.Item) (K, *V, error) {
+		v, err := store.Get(k)
+		if err != nil {
+			return k, nil, err
+		}
+
+		return k, v, nil
 	})
 }
 

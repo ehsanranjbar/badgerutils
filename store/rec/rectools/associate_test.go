@@ -1,4 +1,4 @@
-package recutil_test
+package rectools_test
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	"github.com/ehsanranjbar/badgerutils/iters"
 	extstore "github.com/ehsanranjbar/badgerutils/store/ext"
 	recstore "github.com/ehsanranjbar/badgerutils/store/rec"
-	"github.com/ehsanranjbar/badgerutils/store/rec/recutil"
+	rectools "github.com/ehsanranjbar/badgerutils/store/rec/rectools"
 	"github.com/ehsanranjbar/badgerutils/testutil"
 	"github.com/stretchr/testify/suite"
 )
@@ -17,7 +17,7 @@ type AssociateSuite struct {
 	txn *badger.Txn
 	ps  *recstore.Store[int64, testutil.SampleEntity, *testutil.SampleEntity]
 	cs  *recstore.Store[int64, testutil.SampleEntity, *testutil.SampleEntity]
-	rel *recutil.Association[int64, testutil.SampleEntity, *testutil.SampleEntity, int64, testutil.SampleEntity, *testutil.SampleEntity]
+	rel *rectools.Association[int64, testutil.SampleEntity, *testutil.SampleEntity, int64, testutil.SampleEntity, *testutil.SampleEntity]
 	psi *recstore.Instance[int64, testutil.SampleEntity, *testutil.SampleEntity]
 	csi *recstore.Instance[int64, testutil.SampleEntity, *testutil.SampleEntity]
 }
@@ -32,7 +32,7 @@ func (ts *AssociateSuite) SetupTest() {
 	ts.ps = testutil.NewEntityStore([]byte("p"))
 	ts.cs = testutil.NewEntityStore([]byte("c"))
 
-	ts.rel = recutil.Associate("p-c-rel", ts.ps, ts.cs)
+	ts.rel = rectools.Associate("p-c-rel", ts.ps, ts.cs)
 
 	ts.psi = ts.ps.Instantiate(ts.txn)
 	ts.csi = ts.cs.Instantiate(ts.txn)
@@ -131,7 +131,7 @@ func (ts *AssociateSuite) TestChildStore() {
 func (ts *AssociateSuite) TestPIDFunc() {
 	ps := testutil.NewEntityStore([]byte("g"))
 	cs := testutil.NewEntityStore([]byte("f"))
-	recutil.Associate("g-f-rel", ps, cs).WithPIDFunc(func(_ *testutil.SampleEntity) (int64, error) {
+	rectools.Associate("g-f-rel", ps, cs).WithPIDFunc(func(_ *testutil.SampleEntity) (int64, error) {
 		return 1, nil
 	})
 
@@ -172,7 +172,7 @@ func (ts *AssociateSuite) TestPIDFunc() {
 func (ts *AssociateSuite) TestAllowOrphans() {
 	ps := testutil.NewEntityStore([]byte("g"))
 	cs := testutil.NewEntityStore([]byte("f"))
-	recutil.Associate("g-f-rel", ps, cs).AllowOrphans()
+	rectools.Associate("g-f-rel", ps, cs).AllowOrphans()
 
 	c1 := testutil.NewSampleEntity("C1")
 
@@ -185,7 +185,7 @@ func (ts *AssociateSuite) TestAllowOrphans() {
 func (ts *AssociateSuite) TestInstance() {
 	ps := testutil.NewEntityStore([]byte("g"))
 	cs := testutil.NewEntityStore([]byte("f"))
-	rel := recutil.Associate("g-f-rel", ps, cs).AllowOrphans()
+	rel := rectools.Associate("g-f-rel", ps, cs).AllowOrphans()
 	ins := rel.Instantiate(ts.txn)
 
 	p1 := testutil.NewSampleEntity("P1")

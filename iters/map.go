@@ -6,56 +6,84 @@ import (
 )
 
 // MapIterator is an iterator that maps the value from T to U.
-type MapIterator[K, V, U any] struct {
-	base badgerutils.Iterator[K, V]
-	f    func(V, *badger.Item) (U, error)
+type MapIterator[KA, VA, KB, VB any] struct {
+	base     badgerutils.Iterator[KA, VA]
+	f        func(KA, VA, *badger.Item) (KB, VB, error)
+	cacheKey *KB
+	cacheVal *VB
+	err      error
 }
 
 // Map creates a new map iterator.
-func Map[K, V, U any](base badgerutils.Iterator[K, V], f func(V, *badger.Item) (U, error)) *MapIterator[K, V, U] {
-	return &MapIterator[K, V, U]{base: base, f: f}
+func Map[KA, VA, KB, VB any](base badgerutils.Iterator[KA, VA], f func(KA, VA, *badger.Item) (KB, VB, error)) *MapIterator[KA, VA, KB, VB] {
+	return &MapIterator[KA, VA, KB, VB]{base: base, f: f}
 }
 
 // Close implements the Iterator interface.
-func (it *MapIterator[K, V, U]) Close() {
+func (it *MapIterator[KA, VA, KB, VB]) Close() {
 	it.base.Close()
 }
 
 // Item implements the Iterator interface.
-func (it *MapIterator[K, V, U]) Item() *badger.Item {
+func (it *MapIterator[KA, VA, KB, VB]) Item() *badger.Item {
 	return it.base.Item()
 }
 
 // Next implements the Iterator interface.
-func (it *MapIterator[K, V, U]) Next() {
+func (it *MapIterator[KA, VA, KB, VB]) Next() {
+	it.cacheKey = nil
+	it.cacheVal = nil
 	it.base.Next()
 }
 
 // Rewind implements the Iterator interface.
-func (it *MapIterator[K, V, U]) Rewind() {
+func (it *MapIterator[KA, VA, KB, VB]) Rewind() {
 	it.base.Rewind()
 }
 
 // Seek implements the Iterator interface.
-func (it *MapIterator[K, V, U]) Seek(key []byte) {
+func (it *MapIterator[KA, VA, KB, VB]) Seek(key []byte) {
 	it.base.Seek(key)
 }
 
 // Valid implements the Iterator interface.
-func (it *MapIterator[K, V, U]) Valid() bool {
+func (it *MapIterator[KA, VA, KB, VB]) Valid() bool {
 	return it.base.Valid()
 }
 
 // Key implements the Iterator interface.
-func (it *MapIterator[K, V, U]) Key() K {
-	return it.base.Key()
+func (it *MapIterator[KA, VA, KB, VB]) Key() KB {
+	if it.cacheKey != nil {
+		return *it.cacheKey
+	}
+
+	it.process()
+	return *it.cacheKey
+}
+
+func (it *MapIterator[KA, VA, KB, VB]) process() {
+	va, err := it.base.Value()
+	if err != nil {
+		it.err = err
+		return
+	}
+
+	kb, vb, err := it.f(it.base.Key(), va, it.base.Item())
+	if err != nil {
+		it.err = err
+		return
+	}
+
+	it.cacheKey = &kb
+	it.cacheVal = &vb
 }
 
 // Value implements the Iterator interface.
-func (it *MapIterator[K, V, U]) Value() (value U, err error) {
-	v, err := it.base.Value()
-	if err != nil {
-		return value, err
+func (it *MapIterator[KA, VA, KB, VB]) Value() (value VB, err error) {
+	if it.cacheVal != nil {
+		return *it.cacheVal, nil
 	}
-	return it.f(v, it.base.Item())
+
+	it.process()
+	return *it.cacheVal, it.err
 }

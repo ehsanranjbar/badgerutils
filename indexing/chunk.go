@@ -26,7 +26,7 @@ func LookupChunks(
 	opts badger.IteratorOptions,
 ) badgerutils.Iterator[[]byte, []byte] {
 	return iters.Flatten(
-		iters.Map(parts, func(p Chunk, _ *badger.Item) (badgerutils.Iterator[[]byte, []byte], error) {
+		iters.Map(parts, func(_ []byte, p Chunk, _ *badger.Item) ([]byte, badgerutils.Iterator[[]byte, []byte], error) {
 			// Omitting the prefix option.
 			iter := store.NewIterator(badger.IteratorOptions{
 				PrefetchSize:   opts.PrefetchSize,
@@ -73,7 +73,7 @@ func LookupChunks(
 				}
 			}
 
-			return iters.Sever(iter, func(key []byte, _ []byte, _ *badger.Item) bool {
+			return nil, iters.Sever(iter, func(key []byte, _ []byte, _ *badger.Item) bool {
 				if opts.Reverse {
 					if p.Low().IsEmpty() {
 						return false

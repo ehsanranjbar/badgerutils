@@ -1,4 +1,4 @@
-package recutil
+package rectools
 
 import (
 	"context"
@@ -22,14 +22,14 @@ var dataStorePrefix = []byte{'d'}
 type Association[
 	PI comparable,
 	PT any,
-	PE recstore.Record[PI, PT],
+	PR recstore.Record[PI, PT],
 	CI comparable,
 	CT any,
-	CE recstore.Record[CI, CT],
+	CR recstore.Record[CI, CT],
 ] struct {
 	name         string
-	parentStore  *recstore.Store[PI, PT, PE]
-	childStore   *recstore.Store[CI, CT, CE]
+	parentStore  *recstore.Store[PI, PT, PR]
+	childStore   *recstore.Store[CI, CT, CR]
 	allowOrphans bool
 	pidFunc      func(*CT) (PI, error)
 	p2c          *refstore.Store
@@ -42,29 +42,29 @@ type Association[
 func Associate[
 	PI comparable,
 	PT any,
-	PE recstore.Record[PI, PT],
+	PR recstore.Record[PI, PT],
 	CI comparable,
 	CT any,
-	CE recstore.Record[CI, CT],
+	CR recstore.Record[CI, CT],
 ](
 	name string,
-	parentStore *recstore.Store[PI, PT, PE],
-	childStore *recstore.Store[CI, CT, CE],
-) *Association[PI, PT, PE, CI, CT, CE] {
-	asc := &Association[PI, PT, PE, CI, CT, CE]{
+	parentStore *recstore.Store[PI, PT, PR],
+	childStore *recstore.Store[CI, CT, CR],
+) *Association[PI, PT, PR, CI, CT, CR] {
+	asc := &Association[PI, PT, PR, CI, CT, CR]{
 		name:        name,
 		parentStore: parentStore,
 		childStore:  childStore,
 	}
 
-	parentStore.WithExtension(name, &associationPExt[PI, PT, PE, CI, CT, CE]{asc: asc})
-	childStore.WithExtension(name, &associationCExt[PI, PT, PE, CI, CT, CE]{asc: asc})
+	parentStore.WithExtension(name, &associationPExt[PI, PT, PR, CI, CT, CR]{asc: asc})
+	childStore.WithExtension(name, &associationCExt[PI, PT, PR, CI, CT, CR]{asc: asc})
 
 	return asc
 }
 
 // AllowOrphans allows children to exist without a parent.
-func (a *Association[PI, PT, PE, CI, CT, CE]) AllowOrphans() *Association[PI, PT, PE, CI, CT, CE] {
+func (a *Association[PI, PT, PR, CI, CT, CR]) AllowOrphans() *Association[PI, PT, PR, CI, CT, CR] {
 	if a.initialized {
 		panic("association already initialized")
 	}
@@ -74,7 +74,7 @@ func (a *Association[PI, PT, PE, CI, CT, CE]) AllowOrphans() *Association[PI, PT
 }
 
 // WithPIDFunc sets a function to get parent id from child.
-func (a *Association[PI, PT, PE, CI, CT, CE]) WithPIDFunc(f func(*CT) (PI, error)) *Association[PI, PT, PE, CI, CT, CE] {
+func (a *Association[PI, PT, PR, CI, CT, CR]) WithPIDFunc(f func(*CT) (PI, error)) *Association[PI, PT, PR, CI, CT, CR] {
 	if a.initialized {
 		panic("association already initialized")
 	}
@@ -84,17 +84,17 @@ func (a *Association[PI, PT, PE, CI, CT, CE]) WithPIDFunc(f func(*CT) (PI, error
 }
 
 // Name returns the name of the association.
-func (a *Association[PI, PT, PE, CI, CT, CE]) Name() string {
+func (a *Association[PI, PT, PR, CI, CT, CR]) Name() string {
 	return a.name
 }
 
 // Instantiate creates a new Instance.
-func (a *Association[PI, PT, PE, CI, CT, CE]) Instantiate(txn *badger.Txn) *AssociationInstance[PI, PT, PE, CI, CT, CE] {
+func (a *Association[PI, PT, PR, CI, CT, CR]) Instantiate(txn *badger.Txn) *AssociationInstance[PI, PT, PR, CI, CT, CR] {
 	a.init.Do(func() {
 		a.initialized = true
 	})
 
-	return &AssociationInstance[PI, PT, PE, CI, CT, CE]{
+	return &AssociationInstance[PI, PT, PR, CI, CT, CR]{
 		name:        a.name,
 		parentStore: a.parentStore.Instantiate(txn),
 		pidCodec:    a.parentStore.IdCodec(),
@@ -110,15 +110,15 @@ func (a *Association[PI, PT, PE, CI, CT, CE]) Instantiate(txn *badger.Txn) *Asso
 type AssociationInstance[
 	PI comparable,
 	PT any,
-	PE recstore.Record[PI, PT],
+	PR recstore.Record[PI, PT],
 	CI comparable,
 	CT any,
-	CE recstore.Record[CI, CT],
+	CR recstore.Record[CI, CT],
 ] struct {
 	name        string
-	parentStore *recstore.Instance[PI, PT, PE]
+	parentStore *recstore.Instance[PI, PT, PR]
 	pidCodec    codec.Codec[PI]
-	childStore  *recstore.Instance[CI, CT, CE]
+	childStore  *recstore.Instance[CI, CT, CR]
 	cidCodec    codec.Codec[CI]
 	pidFunc     func(*CT) (PI, error)
 	p2c         *refstore.Instance
@@ -126,12 +126,12 @@ type AssociationInstance[
 }
 
 // Name returns the name of the association.
-func (a *AssociationInstance[PI, PT, PE, CI, CT, CE]) Name() string {
+func (a *AssociationInstance[PI, PT, PR, CI, CT, CR]) Name() string {
 	return a.name
 }
 
 // Set sets the parent and children of the given parent id.
-func (a *AssociationInstance[PI, PT, PE, CI, CT, CE]) Set(p *PT, cs ...*CT) error {
+func (a *AssociationInstance[PI, PT, PR, CI, CT, CR]) Set(p *PT, cs ...*CT) error {
 	if p != nil {
 		opts := make([]any, 0, len(cs))
 		for _, c := range cs {
@@ -152,7 +152,7 @@ func (a *AssociationInstance[PI, PT, PE, CI, CT, CE]) Set(p *PT, cs ...*CT) erro
 }
 
 // GetParent returns the parent entity of the given child id.
-func (a *AssociationInstance[PI, PT, PE, CI, CT, CE]) GetParent(cid CI) (*PT, error) {
+func (a *AssociationInstance[PI, PT, PR, CI, CT, CR]) GetParent(cid CI) (*PT, error) {
 	pid, err := a.GetParentId(cid)
 	if errors.Is(err, badger.ErrKeyNotFound) {
 		return nil, nil
@@ -165,7 +165,7 @@ func (a *AssociationInstance[PI, PT, PE, CI, CT, CE]) GetParent(cid CI) (*PT, er
 }
 
 // GetParentId returns the parent id of the given child id.
-func (a *AssociationInstance[PI, PT, PE, CI, CT, CE]) GetParentId(cid CI) (pid PI, err error) {
+func (a *AssociationInstance[PI, PT, PR, CI, CT, CR]) GetParentId(cid CI) (pid PI, err error) {
 	ck, err := a.cidCodec.Encode(cid)
 	if err != nil {
 		return pid, fmt.Errorf("failed to encode child id: %w", err)
@@ -185,7 +185,7 @@ func (a *AssociationInstance[PI, PT, PE, CI, CT, CE]) GetParentId(cid CI) (pid P
 }
 
 // GetChildren returns the children of the given parent id.
-func (a *AssociationInstance[PI, PT, PE, CI, CT, CE]) GetChildrenIterator(pid PI, opts badger.IteratorOptions) (badgerutils.Iterator[[]byte, *CT], error) {
+func (a *AssociationInstance[PI, PT, PR, CI, CT, CR]) GetChildrenIterator(pid PI, opts badger.IteratorOptions) (badgerutils.Iterator[CI, *CT], error) {
 	pk, err := a.pidCodec.Encode(pid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode parent id: %w", err)
@@ -196,13 +196,13 @@ func (a *AssociationInstance[PI, PT, PE, CI, CT, CE]) GetChildrenIterator(pid PI
 		a.childStore,
 		iters.Map(
 			a.p2c.NewIterator(opts),
-			func(k []byte, _ *badger.Item) (CI, error) {
+			func(_ []byte, k []byte, _ *badger.Item) ([]byte, CI, error) {
 				cid, err := a.cidCodec.Decode(k)
 				if err != nil {
-					return cid, fmt.Errorf("failed to decode child id: %w", err)
+					return nil, cid, fmt.Errorf("failed to decode child id: %w", err)
 				}
 
-				return cid, nil
+				return nil, cid, nil
 			},
 		),
 	)
@@ -213,20 +213,20 @@ func (a *AssociationInstance[PI, PT, PE, CI, CT, CE]) GetChildrenIterator(pid PI
 type associationPExt[
 	PI comparable,
 	PT any,
-	PE recstore.Record[PI, PT],
+	PR recstore.Record[PI, PT],
 	CI comparable,
 	CT any,
-	CE recstore.Record[CI, CT],
+	CR recstore.Record[CI, CT],
 ] struct {
-	asc *Association[PI, PT, PE, CI, CT, CE]
+	asc *Association[PI, PT, PR, CI, CT, CR]
 }
 
-func (e associationPExt[PI, PT, PE, CI, CT, CE]) Instantiate(txn *badger.Txn) extstore.ExtensionInstance[PT] {
+func (e associationPExt[PI, PT, PR, CI, CT, CR]) Instantiate(txn *badger.Txn) extstore.ExtensionInstance[PT] {
 	e.asc.init.Do(func() {
 		e.asc.initialized = true
 	})
 
-	return &associationPExtIns[PI, PT, PE, CI, CT, CE]{
+	return &associationPExtIns[PI, PT, PR, CI, CT, CR]{
 		name:       e.asc.name,
 		cidCodec:   e.asc.childStore.IdCodec(),
 		childStore: e.asc.childStore.Instantiate(txn),
@@ -234,25 +234,25 @@ func (e associationPExt[PI, PT, PE, CI, CT, CE]) Instantiate(txn *badger.Txn) ex
 	}
 }
 
-func (e associationPExt[PI, PT, PE, CI, CT, CE]) RegisterStore(store badgerutils.Instantiator[badgerutils.BadgerStore]) {
+func (e associationPExt[PI, PT, PR, CI, CT, CR]) RegisterStore(store badgerutils.Instantiator[badgerutils.BadgerStore]) {
 	e.asc.p2c = refstore.New(store)
 }
 
 type associationPExtIns[
 	PI comparable,
 	PT any,
-	PE recstore.Record[PI, PT],
+	PR recstore.Record[PI, PT],
 	CI comparable,
 	CT any,
-	CE recstore.Record[CI, CT],
+	CR recstore.Record[CI, CT],
 ] struct {
 	name       string
 	cidCodec   codec.Codec[CI]
-	childStore *recstore.Instance[CI, CT, CE]
+	childStore *recstore.Instance[CI, CT, CR]
 	p2c        *refstore.Instance
 }
 
-func (e *associationPExtIns[PI, PT, PE, CI, CT, CE]) OnDelete(_ context.Context, key []byte, value *PT) error {
+func (e *associationPExtIns[PI, PT, PR, CI, CT, CR]) OnDelete(_ context.Context, key []byte, value *PT) error {
 	it := e.p2c.NewIterator(badger.IteratorOptions{
 		PrefetchSize: 100,
 		Prefix:       key,
@@ -275,10 +275,10 @@ func (e *associationPExtIns[PI, PT, PE, CI, CT, CE]) OnDelete(_ context.Context,
 	return nil
 }
 
-func (e *associationPExtIns[PI, PT, PE, CI, CT, CE]) OnSet(_ context.Context, _ []byte, _, new *PT, opts ...any) error {
+func (e *associationPExtIns[PI, PT, PR, CI, CT, CR]) OnSet(_ context.Context, _ []byte, _, new *PT, opts ...any) error {
 	childs := findAs[*CT](opts)
 	for _, child := range childs {
-		pid := PE(new).GetId()
+		pid := PR(new).GetId()
 		err := e.childStore.Set(
 			child,
 			extstore.WithExtOption(e.name, pid),
@@ -297,20 +297,20 @@ type associationPIDSkipCheckFlag struct{}
 type associationCExt[
 	PI comparable,
 	PT any,
-	PE recstore.Record[PI, PT],
+	PR recstore.Record[PI, PT],
 	CI comparable,
 	CT any,
-	CE recstore.Record[CI, CT],
+	CR recstore.Record[CI, CT],
 ] struct {
-	asc *Association[PI, PT, PE, CI, CT, CE]
+	asc *Association[PI, PT, PR, CI, CT, CR]
 }
 
-func (e associationCExt[PI, PT, PE, CI, CT, CE]) Instantiate(txn *badger.Txn) extstore.ExtensionInstance[CT] {
+func (e associationCExt[PI, PT, PR, CI, CT, CR]) Instantiate(txn *badger.Txn) extstore.ExtensionInstance[CT] {
 	e.asc.init.Do(func() {
 		e.asc.initialized = true
 	})
 
-	return &associationCExtIns[PI, PT, PE, CI, CT, CE]{
+	return &associationCExtIns[PI, PT, PR, CI, CT, CR]{
 		name:     e.asc.name,
 		pidCodec: e.asc.parentStore.IdCodec(),
 		// Trick to avoid cyclic dependency since we only need to check if the parent exists.
@@ -322,17 +322,17 @@ func (e associationCExt[PI, PT, PE, CI, CT, CE]) Instantiate(txn *badger.Txn) ex
 	}
 }
 
-func (e associationCExt[PI, PT, PE, CI, CT, CE]) RegisterStore(store badgerutils.Instantiator[badgerutils.BadgerStore]) {
+func (e associationCExt[PI, PT, PR, CI, CT, CR]) RegisterStore(store badgerutils.Instantiator[badgerutils.BadgerStore]) {
 	e.asc.c2p = refstore.New(store)
 }
 
 type associationCExtIns[
 	PI comparable,
 	PT any,
-	PE recstore.Record[PI, PT],
+	PR recstore.Record[PI, PT],
 	CI comparable,
 	CT any,
-	CE recstore.Record[CI, CT],
+	CR recstore.Record[CI, CT],
 ] struct {
 	name        string
 	pidCodec    codec.Codec[PI]
@@ -343,7 +343,7 @@ type associationCExtIns[
 	allowOrphan bool
 }
 
-func (e *associationCExtIns[PI, PT, PE, CI, CT, CE]) OnDelete(_ context.Context, key []byte, value *CT) error {
+func (e *associationCExtIns[PI, PT, PR, CI, CT, CR]) OnDelete(_ context.Context, key []byte, value *CT) error {
 	pid, err := e.getParentId(key, value)
 	if err != nil {
 		return err
@@ -369,7 +369,7 @@ func (e *associationCExtIns[PI, PT, PE, CI, CT, CE]) OnDelete(_ context.Context,
 	return nil
 }
 
-func (e *associationCExtIns[PI, PT, PE, CI, CT, CE]) getParentId(ck []byte, c *CT) (pid PI, err error) {
+func (e *associationCExtIns[PI, PT, PR, CI, CT, CR]) getParentId(ck []byte, c *CT) (pid PI, err error) {
 	if e.pidFunc != nil {
 		pid, err = e.pidFunc(c)
 		if err != nil {
@@ -390,7 +390,7 @@ func (e *associationCExtIns[PI, PT, PE, CI, CT, CE]) getParentId(ck []byte, c *C
 	return pid, nil
 }
 
-func (e *associationCExtIns[PI, PT, PE, CI, CT, CE]) OnSet(_ context.Context, key []byte, _, new *CT, opts ...any) error {
+func (e *associationCExtIns[PI, PT, PR, CI, CT, CR]) OnSet(_ context.Context, key []byte, _, new *CT, opts ...any) error {
 	var (
 		pid PI
 		err error
