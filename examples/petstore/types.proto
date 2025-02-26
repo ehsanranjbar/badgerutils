@@ -2,6 +2,13 @@ syntax = "proto3";
 package types;
 option go_package  = "/types";
 
+message PetRecord {
+    int64 id = 1;
+    int64 categoryId = 2;
+    string name = 3;
+    Status status = 4;
+}
+
 message Pet {
     int64 id = 1;
     Category category = 2;
@@ -22,8 +29,8 @@ message Tag {
 }
 
 enum Status {
-    unknown = 0;
-    available = 1;
-    pending = 2;
-    sold = 3;
+    UNKNOWN = 0;
+    AVAILABLE = 1;
+    PENDING = 2;
+    SOLD = 3;
 }

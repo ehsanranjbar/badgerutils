@@ -4,7 +4,8 @@ go 1.24.0
 
 require (
 	github.com/dgraph-io/badger/v4 v4.5.1
-	github.com/ehsanranjbar/badgerutils v0.0.0-20250218161849-e3198703fcb7
+	github.com/ehsanranjbar/badgerutils v0.0.0-20250224185346-67206ae1393d
+	github.com/google/uuid v1.1.2
 	github.com/labstack/echo/v4 v4.13.3
 	google.golang.org/protobuf v1.36.5
 )
@@ -22,7 +23,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/flatbuffers v25.2.10+incompatible // indirect
-	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/lytics/datemath v0.0.0-20180727225141-3ada1c10b5de // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect

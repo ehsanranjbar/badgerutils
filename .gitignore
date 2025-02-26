@@ -16,3 +16,6 @@
 
 # vscode settings
 .vscode/
+
+# badger db files
+*.db

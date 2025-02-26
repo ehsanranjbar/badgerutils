@@ -5,18 +5,33 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// SetId implements estore.Entity
-func (msg *Pet) SetId(id int64) {
+// SetId implements Record
+func (msg *Category) SetId(id int64) {
 	msg.Id = id
 }
 
 // MarshalBinary implements encoding.BinaryMarshaler
-func (msg *Pet) MarshalBinary() ([]byte, error) {
+func (msg *Category) MarshalBinary() ([]byte, error) {
 	return proto.Marshal(msg)
 }
 
 // UnmarshalBinary implements encoding.BinaryUnmarshaler
-func (msg *Pet) UnmarshalBinary(b []byte) error {
+func (msg *Category) UnmarshalBinary(b []byte) error {
+	return proto.Unmarshal(b, msg)
+}
+
+// SetId implements Record
+func (msg *PetRecord) SetId(id int64) {
+	msg.Id = id
+}
+
+// MarshalBinary implements encoding.BinaryMarshaler
+func (msg *PetRecord) MarshalBinary() ([]byte, error) {
+	return proto.Marshal(msg)
+}
+
+// UnmarshalBinary implements encoding.BinaryUnmarshaler
+func (msg *PetRecord) UnmarshalBinary(b []byte) error {
 	return proto.Unmarshal(b, msg)
 }
 
