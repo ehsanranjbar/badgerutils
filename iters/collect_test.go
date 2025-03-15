@@ -17,3 +17,13 @@ func TestCollect(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, items, collected)
 }
+
+func TestCollectKeys(t *testing.T) {
+	var (
+		items = []int{1, 2, 3}
+		it    = iters.Enumerate[byte](iters.Slice(items))
+	)
+
+	collected := iters.CollectKeys(it)
+	require.Equal(t, []byte{0, 1, 2}, collected)
+}

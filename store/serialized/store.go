@@ -8,14 +8,14 @@ import (
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 )
 
-// PBS is an interface for pointer of T that is binary serializable/deserializable.
-type PBS[T any] interface {
+// BSP is an interface for pointer of T that is binary serializable/deserializable.
+type BSP[T any] interface {
 	*T
 	encoding.BinaryMarshaler
 	encoding.BinaryUnmarshaler
 }
 
-type Store[T any, PT PBS[T]] struct {
+type Store[T any, PT BSP[T]] struct {
 	base   badgerutils.Instantiator[badgerutils.BadgerStore]
 	prefix []byte
 }
@@ -23,7 +23,7 @@ type Store[T any, PT PBS[T]] struct {
 // New creates a new Store.
 func New[
 	T any,
-	PT PBS[T],
+	PT BSP[T],
 ](base badgerutils.Instantiator[badgerutils.BadgerStore]) *Store[T, PT] {
 	var prefix []byte
 	if pfx, ok := base.(prefixed); ok {
@@ -59,7 +59,7 @@ func (s *Store[T, PT]) Instantiate(txn *badger.Txn) badgerutils.StoreInstance[[]
 }
 
 // Instance is a store that serializes all keys and values.
-type Instance[T any, PT PBS[T]] struct {
+type Instance[T any, PT BSP[T]] struct {
 	base   badgerutils.BadgerStore
 	prefix []byte
 }

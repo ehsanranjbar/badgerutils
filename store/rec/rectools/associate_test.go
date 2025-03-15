@@ -49,7 +49,6 @@ func (ts *AssociateSuite) TestParentStore() {
 	err = ts.psi.Set(p2, extstore.WithExtOption(ts.rel.Name(), c2))
 	ts.NoError(err)
 
-	dump := testutil.Dump(ts.txn)
 	ts.Equal(
 		map[string]string{
 			"cd\x80\x00\x00\x00\x00\x00\x00\x01":                                        "{\"name\":\"C1\"}",
@@ -61,13 +60,12 @@ func (ts *AssociateSuite) TestParentStore() {
 			"pxp-c-rel\x80\x00\x00\x00\x00\x00\x00\x01\x80\x00\x00\x00\x00\x00\x00\x01": "",
 			"pxp-c-rel\x80\x00\x00\x00\x00\x00\x00\x02\x80\x00\x00\x00\x00\x00\x00\x02": "",
 		},
-		dump,
+		testutil.Dump(ts.txn),
 	)
 
 	err = ts.psi.Delete(p1.Id)
 	ts.NoError(err)
 
-	dump = testutil.Dump(ts.txn)
 	ts.Equal(
 		map[string]string{
 			"cd\x80\x00\x00\x00\x00\x00\x00\x02":                                        "{\"name\":\"C2\"}",
@@ -75,7 +73,7 @@ func (ts *AssociateSuite) TestParentStore() {
 			"pd\x80\x00\x00\x00\x00\x00\x00\x02":                                        "{\"name\":\"P2\"}",
 			"pxp-c-rel\x80\x00\x00\x00\x00\x00\x00\x02\x80\x00\x00\x00\x00\x00\x00\x02": "",
 		},
-		dump,
+		testutil.Dump(ts.txn),
 	)
 }
 
@@ -99,7 +97,6 @@ func (ts *AssociateSuite) TestChildStore() {
 	err = ts.csi.Set(c2, extstore.WithExtOption(ts.rel.Name(), p1.Id))
 	ts.NoError(err)
 
-	dump := testutil.Dump(ts.txn)
 	ts.Equal(
 		map[string]string{
 			"cd\x80\x00\x00\x00\x00\x00\x00\x01":                                        "{\"name\":\"C1\"}",
@@ -110,13 +107,12 @@ func (ts *AssociateSuite) TestChildStore() {
 			"pxp-c-rel\x80\x00\x00\x00\x00\x00\x00\x01\x80\x00\x00\x00\x00\x00\x00\x01": "",
 			"pxp-c-rel\x80\x00\x00\x00\x00\x00\x00\x01\x80\x00\x00\x00\x00\x00\x00\x02": "",
 		},
-		dump,
+		testutil.Dump(ts.txn),
 	)
 
 	err = ts.csi.Delete(c1.Id)
 	ts.NoError(err)
 
-	dump = testutil.Dump(ts.txn)
 	ts.Equal(
 		map[string]string{
 			"cd\x80\x00\x00\x00\x00\x00\x00\x02":                                        "{\"name\":\"C2\"}",
@@ -124,7 +120,7 @@ func (ts *AssociateSuite) TestChildStore() {
 			"pd\x80\x00\x00\x00\x00\x00\x00\x01":                                        "{\"name\":\"P1\"}",
 			"pxp-c-rel\x80\x00\x00\x00\x00\x00\x00\x01\x80\x00\x00\x00\x00\x00\x00\x02": "",
 		},
-		dump,
+		testutil.Dump(ts.txn),
 	)
 }
 
@@ -147,32 +143,30 @@ func (ts *AssociateSuite) TestPIDFunc() {
 	err = csi.Set(c1)
 	ts.NoError(err)
 
-	dump := testutil.Dump(ts.txn)
 	ts.Equal(
 		map[string]string{
 			"fd\x80\x00\x00\x00\x00\x00\x00\x01":                                        "{\"name\":\"C1\"}",
 			"gd\x80\x00\x00\x00\x00\x00\x00\x01":                                        "{\"name\":\"P1\"}",
 			"gxg-f-rel\x80\x00\x00\x00\x00\x00\x00\x01\x80\x00\x00\x00\x00\x00\x00\x01": "",
 		},
-		dump,
+		testutil.Dump(ts.txn),
 	)
 
 	err = csi.Delete(c1.Id)
 	ts.NoError(err)
 
-	dump = testutil.Dump(ts.txn)
 	ts.Equal(
 		map[string]string{
 			"gd\x80\x00\x00\x00\x00\x00\x00\x01": "{\"name\":\"P1\"}",
 		},
-		dump,
+		testutil.Dump(ts.txn),
 	)
 }
 
-func (ts *AssociateSuite) TestAllowOrphans() {
+func (ts *AssociateSuite) TestPartial() {
 	ps := testutil.NewEntityStore([]byte("g"))
 	cs := testutil.NewEntityStore([]byte("f"))
-	rectools.Associate("g-f-rel", ps, cs).AllowOrphans()
+	rectools.Associate("g-f-rel", ps, cs).Partial()
 
 	c1 := testutil.NewSampleEntity("C1")
 
@@ -185,7 +179,7 @@ func (ts *AssociateSuite) TestAllowOrphans() {
 func (ts *AssociateSuite) TestInstance() {
 	ps := testutil.NewEntityStore([]byte("g"))
 	cs := testutil.NewEntityStore([]byte("f"))
-	rel := rectools.Associate("g-f-rel", ps, cs).AllowOrphans()
+	rel := rectools.Associate("g-f-rel", ps, cs).Partial()
 	ins := rel.Instantiate(ts.txn)
 
 	p1 := testutil.NewSampleEntity("P1")

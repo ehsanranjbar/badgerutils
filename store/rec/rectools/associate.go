@@ -18,7 +18,7 @@ import (
 
 var dataStorePrefix = []byte{'d'}
 
-// Association is a 1-n relation between entities of two store (parent and child).
+// Association is a 1-n relation between a strong parent entity and weak children entities.
 type Association[
 	PI comparable,
 	PT any,
@@ -27,15 +27,15 @@ type Association[
 	CT any,
 	CR recstore.Record[CI, CT],
 ] struct {
-	name         string
-	parentStore  *recstore.Store[PI, PT, PR]
-	childStore   *recstore.Store[CI, CT, CR]
-	allowOrphans bool
-	pidFunc      func(*CT) (PI, error)
-	p2c          *refstore.Store
-	c2p          *refstore.Store
-	init         sync.Once
-	initialized  bool
+	name        string
+	parentStore *recstore.Store[PI, PT, PR]
+	childStore  *recstore.Store[CI, CT, CR]
+	partial     bool
+	pidFunc     func(*CT) (PI, error)
+	p2c         *refstore.Store
+	c2p         *refstore.Store
+	init        sync.Once
+	initialized bool
 }
 
 // Associate relates two stores in a parent-child relation.
@@ -63,13 +63,13 @@ func Associate[
 	return asc
 }
 
-// AllowOrphans allows children to exist without a parent.
-func (a *Association[PI, PT, PR, CI, CT, CR]) AllowOrphans() *Association[PI, PT, PR, CI, CT, CR] {
+// Partial allows children to exist without a parent.
+func (a *Association[PI, PT, PR, CI, CT, CR]) Partial() *Association[PI, PT, PR, CI, CT, CR] {
 	if a.initialized {
 		panic("association already initialized")
 	}
 
-	a.allowOrphans = true
+	a.partial = true
 	return a
 }
 
@@ -188,7 +188,7 @@ func (a *AssociationInstance[PI, PT, PR, CI, CT, CR]) GetParentId(cid CI) (pid P
 func (a *AssociationInstance[PI, PT, PR, CI, CT, CR]) GetChildrenIterator(pid PI, opts badger.IteratorOptions) (badgerutils.Iterator[CI, *CT], error) {
 	pk, err := a.pidCodec.Encode(pid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode parent id: %w", err)
+		panic(fmt.Errorf("failed to encode parent id: %w", err))
 	}
 
 	opts.Prefix = append(pk, opts.Prefix...)
@@ -254,8 +254,8 @@ type associationPExtIns[
 
 func (e *associationPExtIns[PI, PT, PR, CI, CT, CR]) OnDelete(_ context.Context, key []byte, value *PT) error {
 	it := e.p2c.NewIterator(badger.IteratorOptions{
-		PrefetchSize: 100,
-		Prefix:       key,
+		PrefetchValues: false,
+		Prefix:         key,
 	})
 	defer it.Close()
 
@@ -282,7 +282,7 @@ func (e *associationPExtIns[PI, PT, PR, CI, CT, CR]) OnSet(_ context.Context, _ 
 		err := e.childStore.Set(
 			child,
 			extstore.WithExtOption(e.name, pid),
-			extstore.WithExtOption(e.name, associationPIDSkipCheckFlag{}),
+			extstore.WithExtOption(e.name, bypassRelationRegulation{}),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to set child: %w", err)
@@ -291,8 +291,6 @@ func (e *associationPExtIns[PI, PT, PR, CI, CT, CR]) OnSet(_ context.Context, _ 
 
 	return nil
 }
-
-type associationPIDSkipCheckFlag struct{}
 
 type associationCExt[
 	PI comparable,
@@ -318,7 +316,7 @@ func (e associationCExt[PI, PT, PR, CI, CT, CR]) Instantiate(txn *badger.Txn) ex
 		pidFunc:     e.asc.pidFunc,
 		p2c:         e.asc.p2c.Instantiate(txn).(*refstore.Instance),
 		c2p:         e.asc.c2p.Instantiate(txn).(*refstore.Instance),
-		allowOrphan: e.asc.allowOrphans,
+		partial:     e.asc.partial,
 	}
 }
 
@@ -340,7 +338,7 @@ type associationCExtIns[
 	pidFunc     func(*CT) (PI, error)
 	p2c         *refstore.Instance
 	c2p         *refstore.Instance
-	allowOrphan bool
+	partial     bool
 }
 
 func (e *associationCExtIns[PI, PT, PR, CI, CT, CR]) OnDelete(_ context.Context, key []byte, value *CT) error {
@@ -404,7 +402,7 @@ func (e *associationCExtIns[PI, PT, PR, CI, CT, CR]) OnSet(_ context.Context, ke
 		var ok bool
 		pid, ok = findOneAs[PI](opts)
 		if !ok {
-			if e.allowOrphan {
+			if e.partial {
 				return nil
 			}
 
@@ -417,7 +415,7 @@ func (e *associationCExtIns[PI, PT, PR, CI, CT, CR]) OnSet(_ context.Context, ke
 		return fmt.Errorf("failed to encode parent id: %w", err)
 	}
 
-	if _, ok := findOneAs[associationPIDSkipCheckFlag](opts); !ok {
+	if _, ok := findOneAs[bypassRelationRegulation](opts); !ok {
 		_, err = e.parentStore.Get(pk)
 		if err == badger.ErrKeyNotFound {
 			return fmt.Errorf("parent not found: %w", err)
@@ -441,3 +439,5 @@ func (e *associationCExtIns[PI, PT, PR, CI, CT, CR]) OnSet(_ context.Context, ke
 
 	return nil
 }
+
+type bypassRelationRegulation struct{}

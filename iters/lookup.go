@@ -7,8 +7,9 @@ import (
 
 // LookupIterator is an iterator that looks up the value from a store.
 type LookupIterator[IK, K, V any] struct {
-	base       badgerutils.Iterator[IK, K]
-	getter     Getter[K, V]
+	base   badgerutils.Iterator[IK, K]
+	getter Getter[K, V]
+	// TODO: Checkout if caching the key and value is a good idea.
 	cacheKey   *K
 	cacheValue *V
 }

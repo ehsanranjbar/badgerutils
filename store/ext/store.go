@@ -22,7 +22,7 @@ var (
 // that can modify data before it is stored or do arbitrary operations on set and delete.
 type Store[
 	T any,
-	PT sstore.PBS[T],
+	PT sstore.BSP[T],
 ] struct {
 	dataStore   badgerutils.Instantiator[badgerutils.StoreInstance[[]byte, *T, *T, badgerutils.Iterator[[]byte, *T]]]
 	extStore    *pstore.Store
@@ -35,7 +35,7 @@ type Store[
 // New creates a new Store.
 func New[
 	T any,
-	PT sstore.PBS[T],
+	PT sstore.BSP[T],
 ](base badgerutils.Instantiator[badgerutils.BadgerStore]) *Store[T, PT] {
 	var prefix []byte
 	if pfx, ok := base.(prefixed); ok {
@@ -113,7 +113,7 @@ func (s *Store[T, PT]) Prefix() []byte {
 // Instance is an instance of Store.
 type Instance[
 	T any,
-	PT sstore.PBS[T],
+	PT sstore.BSP[T],
 ] struct {
 	dataStore badgerutils.StoreInstance[[]byte, *T, *T, badgerutils.Iterator[[]byte, *T]]
 	exts      *ordmap.Map[string, ExtensionInstance[T]]
