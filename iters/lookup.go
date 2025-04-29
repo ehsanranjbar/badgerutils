@@ -65,18 +65,18 @@ func (it *LookupIterator[IK, K, V]) Valid() bool {
 }
 
 // Key implements the Iterator interface.
-func (it *LookupIterator[IK, K, V]) Key() K {
+func (it *LookupIterator[IK, K, V]) Key() (k K,err error) {
 	if it.cacheKey != nil {
-		return *it.cacheKey
+		return *it.cacheKey, nil
 	}
 
-	k, err := it.base.Value()
+	k, err = it.base.Value()
 	if err != nil {
-		panic(err)
+		return k, err
 	}
 	it.cacheKey = &k
 
-	return k
+	return k, nil
 }
 
 // Value implements the Iterator interface.
@@ -85,7 +85,12 @@ func (it *LookupIterator[IK, K, V]) Value() (value *V, err error) {
 		return it.cacheValue, nil
 	}
 
-	v, err := it.getter.Get(it.Key())
+	k, err := it.Key()
+	if err != nil {
+		return nil, err
+	}
+
+	v, err := it.getter.Get(k)
 	if err != nil {
 		return value, err
 	}

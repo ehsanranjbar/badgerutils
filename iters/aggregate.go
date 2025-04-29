@@ -67,7 +67,7 @@ func (it *AggregateIterator[K, V, S]) Valid() bool {
 	return it.base.Valid()
 }
 
-func (it *AggregateIterator[K, V, S]) Key() K {
+func (it *AggregateIterator[K, V, S]) Key() (K, error) {
 	return it.base.Key()
 }
 

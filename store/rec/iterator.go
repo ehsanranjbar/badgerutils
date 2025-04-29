@@ -10,12 +10,12 @@ var _ badgerutils.Iterator[int64, *struct{}] = (*Iterator[int64, struct{}])(nil)
 
 // Iterator is an iterator that unmarshal id, data and optionally fetch metadata.
 type Iterator[I comparable, T any] struct {
-	base    badgerutils.Iterator[[]byte, *T]
+	base    badgerutils.Iterator[I, *T]
 	idCodec codec.Codec[I]
 }
 
 func newIterator[I comparable, T any](
-	base badgerutils.Iterator[[]byte, *T],
+	base badgerutils.Iterator[I, *T],
 	idCodec codec.Codec[I],
 ) *Iterator[I, T] {
 	return &Iterator[I, T]{
@@ -65,14 +65,8 @@ func (it *Iterator[I, T]) Valid() bool {
 }
 
 // Key returns the current key.
-func (it *Iterator[I, T]) Key() I {
-	keyBytes := it.base.Key()
-	key, err := it.idCodec.Decode(keyBytes)
-	if err != nil {
-		panic(err)
-	}
-
-	return key
+func (it *Iterator[I, T]) Key() (k I, err error) {
+	return it.base.Key()
 }
 
 // Value returns the current value.

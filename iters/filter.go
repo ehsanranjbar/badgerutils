@@ -71,7 +71,7 @@ func (it *FilterIterator[K, V]) Valid() bool {
 }
 
 // Key implements the Iterator interface.
-func (it *FilterIterator[K, V]) Key() K {
+func (it *FilterIterator[K, V]) Key() (K, error) {
 	return it.base.Key()
 }
 

@@ -34,8 +34,8 @@ func (f *FailStruct) UnmarshalBinary(data []byte) error {
 }
 
 func TestStore(t *testing.T) {
-	store := serialized.New[TestStruct](nil)
-	failStore := serialized.New[FailStruct](nil)
+	store := serialized.New[[]byte, TestStruct](nil)
+	failStore := serialized.New[[]byte, FailStruct](nil)
 
 	txn := testutil.PrepareTxn(t, true)
 	ins := store.Instantiate(txn)

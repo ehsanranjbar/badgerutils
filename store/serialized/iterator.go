@@ -1,75 +1,102 @@
 package serialized
 
 import (
+	"fmt"
+
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
+	"github.com/ehsanranjbar/badgerutils/codec"
 )
 
 // Iterator is an iterator that unmarshal the value.
-type Iterator[T any, PT BSP[T]] struct {
+type Iterator[K, V any, PV BSP[V]] struct {
 	base        badgerutils.BadgerIterator
+	keyCodec    codec.Codec[K]
 	keyProvider keyProvider
-	cachedValue *T
+	cachedKey   *K
+	cachedValue *V
 }
 
 type keyProvider interface {
-	Key() []byte
+	Key() ([]byte, error)
 }
 
 // NewIterator creates a new serialized iterator.
-func NewIterator[T any, PT BSP[T]](base badgerutils.BadgerIterator) *Iterator[T, PT] {
+func NewIterator[K, V any, PV BSP[V]](base badgerutils.BadgerIterator, kc codec.Codec[K]) *Iterator[K, V, PV] {
 	kp, _ := base.(keyProvider)
 
-	return &Iterator[T, PT]{
+	return &Iterator[K, V, PV]{
 		base:        base,
+		keyCodec:    kc,
 		keyProvider: kp,
 	}
 }
 
 // Close closes the iterator.
-func (it *Iterator[T, PT]) Close() {
+func (it *Iterator[K, V, PV]) Close() {
 	it.base.Close()
+	it.cachedKey = nil
+	it.cachedValue = nil
 }
 
 // Item returns the current item.
-func (it *Iterator[T, PT]) Item() *badger.Item {
+func (it *Iterator[K, V, PV]) Item() *badger.Item {
 	return it.base.Item()
 }
 
 // Key returns the current key.
-func (it *Iterator[T, PT]) Next() {
+func (it *Iterator[K, V, PV]) Next() {
 	it.base.Next()
+	it.cachedKey = nil
 	it.cachedValue = nil
 }
 
 // Rewind rewinds the iterator.
-func (it *Iterator[T, PT]) Rewind() {
+func (it *Iterator[K, V, PV]) Rewind() {
 	it.base.Rewind()
+	it.cachedKey = nil
 	it.cachedValue = nil
 }
 
 // Seek seeks the key.
-func (it *Iterator[T, PT]) Seek(key []byte) {
+func (it *Iterator[K, V, PV]) Seek(key []byte) {
 	it.base.Seek(key)
+	it.cachedKey = nil
 	it.cachedValue = nil
 }
 
 // Valid returns if the iterator is valid.
-func (it *Iterator[T, PT]) Valid() bool {
+func (it *Iterator[K, V, PV]) Valid() bool {
 	return it.base.Valid()
 }
 
 // Key returns the current key.
-func (it *Iterator[T, PT]) Key() []byte {
-	if it.keyProvider == nil {
-		return it.base.Item().Key()
+func (it *Iterator[K, V, PV]) Key() (key K, err error) {
+	if it.cachedKey != nil {
+		return *it.cachedKey, nil
 	}
 
-	return it.keyProvider.Key()
+	var kbz []byte
+	if it.keyProvider == nil {
+		kbz = it.base.Item().Key()
+	} else {
+		kbz, err = it.keyProvider.Key()
+		if err != nil {
+			return key, fmt.Errorf("failed to get key: %w", err)
+		}
+	}
+
+	key, err = it.keyCodec.Decode(kbz)
+	if err != nil {
+		return key, fmt.Errorf("failed to decode key \"%s\": %w", it.base.Item().Key(), err)
+	}
+	it.cachedKey = &key
+
+	return key, nil
 }
 
 // Value returns the current value unmarshaled as T
-func (it *Iterator[T, PT]) Value() (value *T, err error) {
+func (it *Iterator[K, V, PV]) Value() (value *V, err error) {
 	if it.cachedValue != nil {
 		return it.cachedValue, nil
 	}
@@ -78,13 +105,13 @@ func (it *Iterator[T, PT]) Value() (value *T, err error) {
 	if item == nil {
 		return nil, nil
 	}
-	v := PT(new(T))
+	v := PV(new(V))
 	err = item.Value(func(val []byte) error {
 		if len(val) == 0 {
 			return nil
 		}
 		return v.UnmarshalBinary(val)
 	})
-	it.cachedValue = (*T)(v)
+	it.cachedValue = v
 	return it.cachedValue, err
 }

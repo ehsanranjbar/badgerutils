@@ -54,8 +54,8 @@ func (e *Enumerator[K, V]) Valid() bool {
 }
 
 // Key returns the current key.
-func (e *Enumerator[K, V]) Key() K {
-	return e.counter
+func (e *Enumerator[K, V]) Key() (K, error) {
+	return e.counter, nil
 }
 
 // Value returns the current value.

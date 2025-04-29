@@ -35,10 +35,10 @@ type Store[
 	T any,
 	PT Record[I, T],
 ] struct {
-	base          *extstore.Store[T, PT]
+	base          *extstore.Store[I, T, PT]
 	idFunc        func(*T) (I, error)
 	idCodec       codec.Codec[I]
-	indexers      map[string]*indexing.Extension[T]
+	indexers      map[string]*indexing.Extension[I, T]
 	extractor     schema.PathExtractor[*T]
 	flatExtractor schema.PathExtractor[[]byte]
 	initialized   bool
@@ -54,9 +54,9 @@ func New[
 	base badgerutils.Instantiator[badgerutils.BadgerStore],
 ) *Store[I, T, PT] {
 	return &Store[I, T, PT]{
-		base:      extstore.New[T, PT](base),
+		base:      extstore.New[I, T, PT](base),
 		idCodec:   codec.CodecFor[I](),
-		indexers:  map[string]*indexing.Extension[T]{},
+		indexers:  map[string]*indexing.Extension[I, T]{},
 		extractor: schema.NewReflectPathExtractor[*T](true),
 	}
 }
@@ -128,14 +128,14 @@ func (s *Store[I, T, PT]) WithIndexer(name string, idx indexing.Indexer[T]) *Sto
 		panic("indexer already exists")
 	}
 
-	ext := indexing.NewExtension(idx).(*indexing.Extension[T])
+	ext := indexing.NewExtension[I](idx).(*indexing.Extension[I, T])
 	s.base.WithExtension(name, ext)
 	s.indexers[name] = ext
 	return s
 }
 
 // WithExtension adds an extension to the store.
-func (s *Store[I, T, PT]) WithExtension(name string, ext extstore.Extension[T]) *Store[I, T, PT] {
+func (s *Store[I, T, PT]) WithExtension(name string, ext extstore.Extension[I, T]) *Store[I, T, PT] {
 	if s.initialized {
 		panic("store already initialized")
 	}
@@ -178,7 +178,7 @@ func (s *Store[I, T, PT]) IdCodec() codec.Codec[I] {
 }
 
 // Indexer returns the indexer with given name.
-func (s *Store[I, T, PT]) Indexer(name string) *indexing.Extension[T] {
+func (s *Store[I, T, PT]) Indexer(name string) *indexing.Extension[I, T] {
 	idx, ok := s.indexers[name]
 	if !ok {
 		return nil
@@ -193,7 +193,7 @@ type Instance[
 	T any,
 	PT Record[I, T],
 ] struct {
-	base      *extstore.Instance[T, PT]
+	base      *extstore.Instance[I, T, PT]
 	idFunc    func(*T) (I, error)
 	idCodec   codec.Codec[I]
 	extractor schema.PathExtractor[*T]
@@ -201,22 +201,12 @@ type Instance[
 
 // Delete implements the badgerutils.StoreInstance interface.
 func (s *Instance[I, T, PT]) Delete(id I) error {
-	key, err := s.idCodec.Encode(id)
-	if err != nil {
-		return err
-	}
-
-	return s.base.Delete(key)
+	return s.base.Delete(id)
 }
 
 // Get implements the badgerutils.StoreInstance interface.
 func (s *Instance[I, T, PT]) Get(id I) (*T, error) {
-	key, err := s.idCodec.Encode(id)
-	if err != nil {
-		return nil, err
-	}
-
-	r, err := s.base.Get(key)
+	r, err := s.base.Get(id)
 	if err != nil {
 		return nil, err
 	}
@@ -245,12 +235,7 @@ func (s *Instance[I, T, PT]) Set(v *T, opts ...any) error {
 		PT(v).SetId(id)
 	}
 
-	key, err := s.idCodec.Encode(PT(v).GetId())
-	if err != nil {
-		return fmt.Errorf("failed to encode id: %w", err)
-	}
-
-	return s.base.SetWithOptions(key, v, opts...)
+	return s.base.SetWithOptions(PT(v).GetId(), v, opts...)
 }
 
 // Query returns the query for the store.

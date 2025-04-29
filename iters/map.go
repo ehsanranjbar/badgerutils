@@ -47,7 +47,7 @@ func (it *MapIterator[K, V, U]) Valid() bool {
 }
 
 // Key implements the Iterator interface.
-func (it *MapIterator[K, V, U]) Key() K {
+func (it *MapIterator[K, V, U]) Key() (K, error) {
 	return it.base.Key()
 }
 

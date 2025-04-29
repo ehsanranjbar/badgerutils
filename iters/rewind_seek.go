@@ -47,7 +47,7 @@ func (it *RewindSeekIterator[K, V]) Valid() bool {
 }
 
 // Key implements the Iterator interface.
-func (it *RewindSeekIterator[K, V]) Key() K {
+func (it *RewindSeekIterator[K, V]) Key() (K, error) {
 	return it.base.Key()
 }
 

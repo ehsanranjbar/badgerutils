@@ -12,7 +12,8 @@ func TestEnumerate(t *testing.T) {
 	defer it.Close()
 
 	for it.Rewind(); it.Valid(); it.Next() {
+		k, _ := it.Key()
 		v, _ := it.Value()
-		require.Equal(t, int8(v)-1, it.Key())
+		require.Equal(t, int8(v)-1, k)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	badger "github.com/dgraph-io/badger/v4"
+	"github.com/ehsanranjbar/badgerutils/iters"
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 	"github.com/ehsanranjbar/badgerutils/store/serialized"
 	"github.com/ehsanranjbar/badgerutils/testutil"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestIterator(t *testing.T) {
-	store := serialized.New[TestStruct](nil)
+	store := serialized.New[[]byte, TestStruct](nil)
 
 	txn := testutil.PrepareTxn(t, true)
 	ins := store.Instantiate(txn)
@@ -29,49 +30,31 @@ func TestIterator(t *testing.T) {
 		iter := ins.NewIterator(badger.DefaultIteratorOptions)
 		defer iter.Close()
 
-		var (
-			actualKeys   [][]byte
-			actualValues []*TestStruct
-		)
-		for iter.Rewind(); iter.Valid(); iter.Next() {
-			item := iter.Item()
-			require.NotNil(t, item)
-
-			v, err := iter.Value()
-			require.NoError(t, err)
-			actualKeys = append(actualKeys, iter.Key())
-			actualValues = append(actualValues, v)
-		}
+		actualKeys, err := iters.CollectKeys(iter)
+		require.NoError(t, err)
 		require.Equal(t, 2, len(actualKeys))
-		require.Equal(t, 2, len(actualValues))
 		require.Equal(t, keys, actualKeys)
+		actualValues, err := iters.Collect(iter)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(actualValues))
 		require.Equal(t, values, actualValues)
 	})
 
 	t.Run("IteratePrefix", func(t *testing.T) {
-		store := serialized.New[TestStruct](pstore.New(nil, []byte("foo")))
+		store := serialized.New[[]byte, TestStruct](pstore.New(nil, []byte("foo")))
 
 		ins := store.Instantiate(txn)
 		iter := ins.NewIterator(badger.DefaultIteratorOptions)
 		defer iter.Close()
 
-		var (
-			actualKeys   [][]byte
-			actualValues []*TestStruct
-		)
-		for iter.Rewind(); iter.Valid(); iter.Next() {
-			item := iter.Item()
-			require.NotNil(t, item)
-
-			v, err := iter.Value()
-			require.NoError(t, err)
-			actualKeys = append(actualKeys, iter.Key())
-			actualValues = append(actualValues, v)
-		}
-
-		require.Equal(t, 2, len(actualKeys))
-		require.Equal(t, 2, len(actualValues))
+		actualKeys, err := iters.CollectKeys(iter)
+		require.NoError(t, err)
 		require.Equal(t, [][]byte{[]byte("1"), []byte("2")}, actualKeys)
+		require.Equal(t, 2, len(actualKeys))
+		actualValues, err := iters.Collect(iter)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(actualValues))
 		require.Equal(t, values, actualValues)
+
 	})
 }

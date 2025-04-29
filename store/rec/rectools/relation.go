@@ -225,11 +225,14 @@ func (i *relationIterator[LI, RI, D, PD]) Valid() bool {
 }
 
 // Key returns the current key.
-func (it *relationIterator[LI, RI, D, PD]) Key() CompoundKey[LI, RI] {
-	lk := it.base.Key()
+func (it *relationIterator[LI, RI, D, PD]) Key() (k CompoundKey[LI, RI], err error) {
+	lk, err := it.base.Key()
+	if err != nil {
+		return k, err
+	}
 	rk, err := it.base.Value()
 	if err != nil {
-		panic(err)
+		return k, err
 	}
 
 	if it.swapKeys {
@@ -238,14 +241,14 @@ func (it *relationIterator[LI, RI, D, PD]) Key() CompoundKey[LI, RI] {
 
 	left, err := it.leftIdCodec.Decode(lk)
 	if err != nil {
-		panic(err)
+		return k, err
 	}
 	right, err := it.rightIdCodec.Decode(rk)
 	if err != nil {
-		panic(err)
+		return k, err
 	}
 
-	return NewCompoundKey(left, right)
+	return NewCompoundKey(left, right), nil
 }
 
 // Value implements the Iterator interface
@@ -335,7 +338,7 @@ type relExt[
 	c2m               **refstore.Store
 }
 
-func (e *relExt[MI, MT, MR, CI, CT, CR, D, PD]) Instantiate(txn *badger.Txn) extstore.ExtensionInstance[MT] {
+func (e *relExt[MI, MT, MR, CI, CT, CR, D, PD]) Instantiate(txn *badger.Txn) extstore.ExtensionInstance[MI, MT] {
 	return &relExtInstance[MI, MT, MR, CI, CT, CR, D, PD]{
 		name:                 e.name,
 		mainIdCodec:          e.mainIdCodec,
@@ -370,23 +373,24 @@ type relExtInstance[
 	c2m                  *refstore.Instance
 }
 
-func (ei *relExtInstance[MI, MT, MR, CI, CT, CR, D, PD]) OnDelete(_ context.Context, key []byte, value *MT) error {
+func (ei *relExtInstance[MI, MT, MR, CI, CT, CR, D, PD]) OnDelete(ctx context.Context, key MI, value *MT) error {
+	kbz := extstore.GetKeyBytesFromContext(ctx)
 	it := ei.m2c.NewIterator(badger.IteratorOptions{
 		PrefetchValues: false,
-		Prefix:         key,
+		Prefix:         kbz,
 	})
 	defer it.Close()
 
 	for it.Rewind(); it.Valid(); it.Next() {
 		cpk, _ := it.Value()
 
-		err := ei.c2m.Delete(append(cpk, key...))
+		err := ei.c2m.Delete(append(cpk, kbz...))
 		if err != nil {
 			return fmt.Errorf("failed to delete %T -> %T ref record: %w", *new(CT), *new(MT), err)
 		}
 	}
 
-	err := ei.m2c.Delete(key)
+	err := ei.m2c.Delete(kbz)
 	if err != nil {
 		return fmt.Errorf("failed to delete %T -> %T ref records: %w", *new(MT), *new(CT), err)
 	}
@@ -394,7 +398,7 @@ func (ei *relExtInstance[MI, MT, MR, CI, CT, CR, D, PD]) OnDelete(_ context.Cont
 	return nil
 }
 
-func (ei *relExtInstance[MI, MT, MR, CI, CT, CR, D, PD]) OnSet(_ context.Context, key []byte, _, _ *MT, opts ...any) error {
+func (ei *relExtInstance[MI, MT, MR, CI, CT, CR, D, PD]) OnSet(ctx context.Context, key MI, _, _ *MT, opts ...any) error {
 	cpids := findAs[CI](opts)
 
 	for _, cpid := range cpids {
@@ -411,12 +415,13 @@ func (ei *relExtInstance[MI, MT, MR, CI, CT, CR, D, PD]) OnSet(_ context.Context
 			return fmt.Errorf("no record with id %v found in counterparty store", cpid)
 		}
 
-		err = ei.m2c.Set(cpk, refstore.NewRefEntry(key))
+		kbz := extstore.GetKeyBytesFromContext(ctx)
+		err = ei.m2c.Set(cpk, refstore.NewRefEntry(kbz))
 		if err != nil {
 			return fmt.Errorf("failed to set %T -> %T ref record: %w", *new(MT), *new(CT), err)
 		}
 
-		err = ei.c2m.Set(key, refstore.NewRefEntry(cpk))
+		err = ei.c2m.Set(kbz, refstore.NewRefEntry(cpk))
 		if err != nil {
 			return fmt.Errorf("failed to set %T -> %T ref record: %w", *new(CT), *new(MT), err)
 		}

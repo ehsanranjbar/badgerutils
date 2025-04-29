@@ -24,7 +24,7 @@ func (i TestIndexer) Index(v *StructA, update bool) []badgerutils.RawKVPair {
 }
 
 func TestLookupIterator(t *testing.T) {
-	store := sstore.New[StructA](nil)
+	store := sstore.New[[]byte, StructA](nil)
 
 	txn := testutil.PrepareTxn(t, true)
 	ins := store.Instantiate(txn)

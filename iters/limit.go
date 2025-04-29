@@ -53,7 +53,7 @@ func (it *LimitIterator[K, V]) Valid() bool {
 }
 
 // Key implements the Iterator interface.
-func (it *LimitIterator[K, V]) Key() K {
+func (it *LimitIterator[K, V]) Key() (K, error) {
 	return it.base.Key()
 }
 

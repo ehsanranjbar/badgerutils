@@ -24,6 +24,7 @@ func TestCollectKeys(t *testing.T) {
 		it    = iters.Enumerate[byte](iters.Slice(items))
 	)
 
-	collected := iters.CollectKeys(it)
+	collected, err := iters.CollectKeys(it)
+	require.NoError(t, err)
 	require.Equal(t, []byte{0, 1, 2}, collected)
 }

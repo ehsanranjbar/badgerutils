@@ -42,8 +42,14 @@ func (it *SeverIterator[K, V]) Next() {
 }
 
 func (it *SeverIterator[K, V]) checkSevered() {
+	key, err := it.base.Key()
+	if err != nil {
+		it.severed = true
+		return
+	}
+
 	value, err := it.base.Value()
-	if err != nil || it.pred(it.base.Key(), value, it.base.Item()) {
+	if err != nil || it.pred(key, value, it.base.Item()) {
 		it.severed = true
 		return
 	}
@@ -69,7 +75,7 @@ func (it *SeverIterator[K, V]) Valid() bool {
 }
 
 // Key implements the Iterator interface.
-func (it *SeverIterator[K, V]) Key() K {
+func (it *SeverIterator[K, V]) Key() (K, error) {
 	return it.base.Key()
 }
 

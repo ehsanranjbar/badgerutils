@@ -16,10 +16,14 @@ func Collect[K, V any](it badgerutils.Iterator[K, V]) ([]V, error) {
 }
 
 // CollectKeys collects all the keys from the iterator and returns them as a slice.
-func CollectKeys[K, V any](it badgerutils.Iterator[K, V]) []K {
+func CollectKeys[K, V any](it badgerutils.Iterator[K, V]) ([]K, error) {
 	var keys []K
 	for it.Rewind(); it.Valid(); it.Next() {
-		keys = append(keys, it.Key())
+		k, err := it.Key()
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
 	}
-	return keys
+	return keys, nil
 }

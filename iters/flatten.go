@@ -89,12 +89,12 @@ func (it *FlattenIterator[K1, K2, V]) Valid() bool {
 }
 
 // Key implements the Iterator interface.
-func (it *FlattenIterator[K1, K2, V]) Key() (key K2) {
+func (it *FlattenIterator[K1, K2, V]) Key() (key K2, err error) {
 	if it.current != nil {
 		return it.current.Key()
 	}
 
-	return key
+	return key, nil
 }
 
 // Value returns the current value of the iterator.

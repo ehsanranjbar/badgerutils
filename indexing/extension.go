@@ -5,46 +5,46 @@ import (
 
 	badger "github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
-	"github.com/ehsanranjbar/badgerutils/store/ext"
+	extstore "github.com/ehsanranjbar/badgerutils/store/ext"
 	refstore "github.com/ehsanranjbar/badgerutils/store/ref"
 )
 
 // Extension is an extension for extensible stores that indexes the data with a given indexer.
-type Extension[T any] struct {
-	indexer    Indexer[T]
+type Extension[K, V any] struct {
+	indexer    Indexer[V]
 	descriptor IndexDescriptor
 	store      *refstore.Store
 }
 
 // NewExtension creates a new Extension.
-func NewExtension[T any](indexer Indexer[T]) ext.Extension[T] {
+func NewExtension[K, V any](indexer Indexer[V]) extstore.Extension[K, V] {
 	descriptor, _ := indexer.(IndexDescriptor)
-	return &Extension[T]{
+	return &Extension[K, V]{
 		indexer:    indexer,
 		descriptor: descriptor,
 	}
 }
 
 // Init implements the extensible.Extension interface.
-func (e *Extension[T]) RegisterStore(store badgerutils.Instantiator[badgerutils.BadgerStore]) {
+func (e *Extension[K, V]) RegisterStore(store badgerutils.Instantiator[badgerutils.BadgerStore]) {
 	e.store = refstore.New(store)
 }
 
 // Instantiate implements the extensible.Extension interface.
-func (e *Extension[T]) Instantiate(txn *badger.Txn) ext.ExtensionInstance[T] {
-	return &ExtensionInstance[T]{
+func (e *Extension[K, V]) Instantiate(txn *badger.Txn) extstore.ExtensionInstance[K, V] {
+	return &ExtensionInstance[K, V]{
 		ext:   e,
 		store: e.store.Instantiate(txn).(*refstore.Instance),
 	}
 }
 
-type ExtensionInstance[T any] struct {
-	ext   *Extension[T]
+type ExtensionInstance[K, V any] struct {
+	ext   *Extension[K, V]
 	store *refstore.Instance
 }
 
 // OnDelete implements the extensible.Extension interface.
-func (e *ExtensionInstance[T]) OnDelete(_ context.Context, key []byte, value *T) error {
+func (e *ExtensionInstance[K, V]) OnDelete(_ context.Context, key K, value *V) error {
 	kvs, err := e.ext.indexer.Index(value, false)
 	if err != nil {
 		return err
@@ -60,17 +60,12 @@ func (e *ExtensionInstance[T]) OnDelete(_ context.Context, key []byte, value *T)
 }
 
 // OnSet implements the extensible.Extension interface.
-func (e *ExtensionInstance[T]) OnSet(_ context.Context, key []byte, old, new *T, opts ...any) error {
+func (e *ExtensionInstance[K, V]) OnSet(ctx context.Context, key K, old, new *V, opts ...any) error {
+	kbz := extstore.GetKeyBytesFromContext(ctx)
 	if old != nil {
-		kvs, err := e.ext.indexer.Index(old, false)
+		err := e.store.Delete(kbz)
 		if err != nil {
 			return err
-		}
-		for _, kv := range kvs {
-			err := e.store.Delete(kv.Key)
-			if err != nil {
-				return err
-			}
 		}
 	}
 
@@ -79,7 +74,7 @@ func (e *ExtensionInstance[T]) OnSet(_ context.Context, key []byte, old, new *T,
 		return err
 	}
 	for _, kv := range kvs {
-		err := e.store.Set(key, refstore.NewRefEntry(kv.Key).WithValue(kv.Value))
+		err := e.store.Set(kbz, refstore.NewRefEntry(kv.Key).WithValue(kv.Value))
 		if err != nil {
 			return err
 		}
@@ -89,7 +84,7 @@ func (e *ExtensionInstance[T]) OnSet(_ context.Context, key []byte, old, new *T,
 }
 
 // Lookup queries the index with the given arguments and returns an iterator of keys.
-func (e *ExtensionInstance[T]) Lookup(opts badger.IteratorOptions, args ...any) (badgerutils.Iterator[[]byte, []byte], error) {
+func (e *ExtensionInstance[K, V]) Lookup(opts badger.IteratorOptions, args ...any) (badgerutils.Iterator[[]byte, []byte], error) {
 	iter, err := e.ext.indexer.Lookup(args...)
 	if err != nil {
 		return nil, err
@@ -99,11 +94,11 @@ func (e *ExtensionInstance[T]) Lookup(opts badger.IteratorOptions, args ...any) 
 }
 
 // SupportedQueries returns the supported queries of the index.
-func (e *ExtensionInstance[T]) SupportedQueries() []string {
+func (e *ExtensionInstance[K, V]) SupportedQueries() []string {
 	return e.ext.descriptor.SupportedQueries()
 }
 
 // SupportedValues returns the supported values of the index.
-func (e *ExtensionInstance[T]) SupportedValues() []string {
+func (e *ExtensionInstance[K, V]) SupportedValues() []string {
 	return e.ext.descriptor.SupportedValues()
 }

@@ -46,8 +46,8 @@ func (it *sliceIterator[T]) Valid() bool {
 }
 
 // Key implements the Iterator interface.
-func (it *sliceIterator[T]) Key() []byte {
-	return lex.EncodeInt64(int64(it.i))
+func (it *sliceIterator[T]) Key() ([]byte, error) {
+	return lex.EncodeInt64(int64(it.i)), nil
 }
 
 // Value implements the Iterator interface.

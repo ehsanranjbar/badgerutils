@@ -7,13 +7,13 @@ import (
 // Iterator is an interface that extends ValueIterator with a Key method.
 type Iterator[K, V any] interface {
 	ValueIterator[V]
-	Key() K
+	Key() (K, error)
 }
 
 // ValueIterator is an interface that extends BadgerIterator with a Value method.
 type ValueIterator[V any] interface {
 	BadgerIterator
-	Value() (value V, err error)
+	Value() (V, error)
 }
 
 // BadgerIterator is the interface that represents a badger iterator.

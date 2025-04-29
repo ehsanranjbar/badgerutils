@@ -1,9 +1,10 @@
-package schema
+package schema_test
 
 import (
 	"reflect"
 	"testing"
 
+	"github.com/ehsanranjbar/badgerutils/schema"
 	"github.com/stretchr/testify/require"
 )
 
@@ -105,7 +106,7 @@ func TestExtractPathFromAny(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ExtractPathFromAny(tt.v, tt.path)
+			got, err := schema.ExtractPathFromAny(tt.v, tt.path)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {

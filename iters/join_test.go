@@ -12,8 +12,8 @@ import (
 )
 
 func TestJoin(t *testing.T) {
-	aStore := sstore.New[StructA](pstore.New(nil, []byte("a")))
-	bStore := sstore.New[StructB](pstore.New(nil, []byte("b")))
+	aStore := sstore.New[[]byte, StructA](pstore.New(nil, []byte("a")))
+	bStore := sstore.New[[]byte, StructB](pstore.New(nil, []byte("b")))
 
 	txn := testutil.PrepareTxn(t, true)
 	aIns := aStore.Instantiate(txn)

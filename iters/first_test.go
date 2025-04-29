@@ -12,7 +12,7 @@ import (
 )
 
 func TestFirst(t *testing.T) {
-	store := sstore.New[StructA](pstore.New(nil, []byte("v")))
+	store := sstore.New[[]byte, StructA](pstore.New(nil, []byte("v")))
 
 	txn := testutil.PrepareTxn(t, true)
 	ins := store.Instantiate(txn)

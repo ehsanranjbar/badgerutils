@@ -47,7 +47,7 @@ func (it *SkipIterator[K, V, S]) Rewind() {
 
 func (it *SkipIterator[K, V, S]) skip() {
 	for it.base.Valid() {
-		k := it.base.Key()
+		k, _ := it.base.Key()
 		v, _ := it.base.Value()
 		s, ok := it.f(it.state, k, v, it.base.Item())
 		if !ok {
@@ -71,7 +71,7 @@ func (it *SkipIterator[K, V, S]) Valid() bool {
 }
 
 // Key implements the Iterator interface.
-func (it *SkipIterator[K, V, S]) Key() K {
+func (it *SkipIterator[K, V, S]) Key() (K, error) {
 	return it.base.Key()
 }
 

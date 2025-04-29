@@ -221,7 +221,7 @@ type associationPExt[
 	asc *Association[PI, PT, PR, CI, CT, CR]
 }
 
-func (e associationPExt[PI, PT, PR, CI, CT, CR]) Instantiate(txn *badger.Txn) extstore.ExtensionInstance[PT] {
+func (e associationPExt[PI, PT, PR, CI, CT, CR]) Instantiate(txn *badger.Txn) extstore.ExtensionInstance[PI, PT] {
 	e.asc.init.Do(func() {
 		e.asc.initialized = true
 	})
@@ -252,10 +252,10 @@ type associationPExtIns[
 	p2c        *refstore.Instance
 }
 
-func (e *associationPExtIns[PI, PT, PR, CI, CT, CR]) OnDelete(_ context.Context, key []byte, value *PT) error {
+func (e *associationPExtIns[PI, PT, PR, CI, CT, CR]) OnDelete(ctx context.Context, key PI, value *PT) error {
 	it := e.p2c.NewIterator(badger.IteratorOptions{
 		PrefetchValues: false,
-		Prefix:         key,
+		Prefix:         extstore.GetKeyBytesFromContext(ctx),
 	})
 	defer it.Close()
 
@@ -275,7 +275,7 @@ func (e *associationPExtIns[PI, PT, PR, CI, CT, CR]) OnDelete(_ context.Context,
 	return nil
 }
 
-func (e *associationPExtIns[PI, PT, PR, CI, CT, CR]) OnSet(_ context.Context, _ []byte, _, new *PT, opts ...any) error {
+func (e *associationPExtIns[PI, PT, PR, CI, CT, CR]) OnSet(_ context.Context, _ PI, _, new *PT, opts ...any) error {
 	childs := findAs[*CT](opts)
 	for _, child := range childs {
 		pid := PR(new).GetId()
@@ -303,7 +303,7 @@ type associationCExt[
 	asc *Association[PI, PT, PR, CI, CT, CR]
 }
 
-func (e associationCExt[PI, PT, PR, CI, CT, CR]) Instantiate(txn *badger.Txn) extstore.ExtensionInstance[CT] {
+func (e associationCExt[PI, PT, PR, CI, CT, CR]) Instantiate(txn *badger.Txn) extstore.ExtensionInstance[CI, CT] {
 	e.asc.init.Do(func() {
 		e.asc.initialized = true
 	})
@@ -341,15 +341,16 @@ type associationCExtIns[
 	partial     bool
 }
 
-func (e *associationCExtIns[PI, PT, PR, CI, CT, CR]) OnDelete(_ context.Context, key []byte, value *CT) error {
-	pid, err := e.getParentId(key, value)
+func (e *associationCExtIns[PI, PT, PR, CI, CT, CR]) OnDelete(ctx context.Context, key CI, value *CT) error {
+	kbz := extstore.GetKeyBytesFromContext(ctx)
+	pid, err := e.getParentId(kbz, value)
 	if err != nil {
 		return err
 	}
 
 	// Without pidFunc there should be a ref in c2p store.
 	if e.pidFunc == nil {
-		err = e.c2p.Delete(key)
+		err = e.c2p.Delete(kbz)
 		if err != nil {
 			return fmt.Errorf("failed to delete ref from c2p store: %w", err)
 		}
@@ -359,7 +360,7 @@ func (e *associationCExtIns[PI, PT, PR, CI, CT, CR]) OnDelete(_ context.Context,
 	if err != nil {
 		return fmt.Errorf("failed to encode parent id: %w", err)
 	}
-	err = e.p2c.Delete(append(pk, key...))
+	err = e.p2c.Delete(append(pk, kbz...))
 	if err != nil {
 		return fmt.Errorf("failed to delete refs from p2c store: %w", err)
 	}
@@ -388,7 +389,7 @@ func (e *associationCExtIns[PI, PT, PR, CI, CT, CR]) getParentId(ck []byte, c *C
 	return pid, nil
 }
 
-func (e *associationCExtIns[PI, PT, PR, CI, CT, CR]) OnSet(_ context.Context, key []byte, _, new *CT, opts ...any) error {
+func (e *associationCExtIns[PI, PT, PR, CI, CT, CR]) OnSet(ctx context.Context, key CI, _, new *CT, opts ...any) error {
 	var (
 		pid PI
 		err error
@@ -425,13 +426,14 @@ func (e *associationCExtIns[PI, PT, PR, CI, CT, CR]) OnSet(_ context.Context, ke
 		}
 	}
 
-	err = e.p2c.Set(key, refstore.NewRefEntry(pk))
+	kbz := extstore.GetKeyBytesFromContext(ctx)
+	err = e.p2c.Set(kbz, refstore.NewRefEntry(pk))
 	if err != nil {
 		return fmt.Errorf("failed to set ref in p2c store: %w", err)
 	}
 
 	if e.pidFunc == nil {
-		err = e.c2p.Set(pk, refstore.NewRefEntry(key))
+		err = e.c2p.Set(pk, refstore.NewRefEntry(kbz))
 		if err != nil {
 			return fmt.Errorf("failed to set ref in c2p store: %w", err)
 		}

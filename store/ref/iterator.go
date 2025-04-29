@@ -13,7 +13,7 @@ type iterator struct {
 }
 
 type keyProvider interface {
-	Key() []byte
+	Key() ([]byte, error)
 }
 
 func newIterator(base badgerutils.BadgerIterator) *iterator {
@@ -56,12 +56,16 @@ func (i *iterator) Valid() bool {
 }
 
 // Key returns the current key.
-func (it *iterator) Key() []byte {
+func (it *iterator) Key() ([]byte, error) {
 	if it.keyProvider == nil {
-		return extractPrefix(it.base.Item().Key(), it.base.Item().UserMeta())
+		return extractPrefix(it.base.Item().Key(), it.base.Item().UserMeta()), nil
 	}
 
-	return extractPrefix(it.keyProvider.Key(), it.base.Item().UserMeta())
+	key, err := it.keyProvider.Key()
+	if err != nil {
+		return nil, err
+	}
+	return extractPrefix(key, it.base.Item().UserMeta()), nil
 }
 
 func extractPrefix(key []byte, keyLen uint8) []byte {

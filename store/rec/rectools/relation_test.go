@@ -123,7 +123,8 @@ func (ts *RelationSuite) TestInstance() {
 	it := rel.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
 
-	keys := iters.CollectKeys(it)
+	keys, err := iters.CollectKeys(it)
+	ts.NoError(err)
 	ts.Equal([]rectools.CompoundKey[int64, int64]{rectools.NewCompoundKey(l1.Id, r2.Id)}, keys)
 
 	values, err := iters.Collect(it)

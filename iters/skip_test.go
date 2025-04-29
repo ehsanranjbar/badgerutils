@@ -11,7 +11,7 @@ import (
 )
 
 func TestSkip(t *testing.T) {
-	store := sstore.New[StructA](nil)
+	store := sstore.New[[]byte, StructA](nil)
 
 	txn := testutil.PrepareTxn(t, true)
 	ins := store.Instantiate(txn)

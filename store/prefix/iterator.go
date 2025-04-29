@@ -60,6 +60,6 @@ func (it *Iterator) Valid() bool {
 }
 
 // Key returns the current key.
-func (it *Iterator) Key() []byte {
-	return it.base.Item().Key()[len(it.prefix):]
+func (it *Iterator) Key() ([]byte, error) {
+	return it.base.Item().Key()[len(it.prefix):], nil
 }

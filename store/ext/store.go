@@ -8,6 +8,7 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/ehsanranjbar/badgerutils"
+	"github.com/ehsanranjbar/badgerutils/codec"
 	"github.com/ehsanranjbar/badgerutils/internal/ordmap"
 	pstore "github.com/ehsanranjbar/badgerutils/store/prefix"
 	sstore "github.com/ehsanranjbar/badgerutils/store/serialized"
@@ -20,13 +21,10 @@ var (
 
 // Store is a wrapper around a serialized store with an ordered list of extensions
 // that can modify data before it is stored or do arbitrary operations on set and delete.
-type Store[
-	T any,
-	PT sstore.BSP[T],
-] struct {
-	dataStore   badgerutils.Instantiator[badgerutils.StoreInstance[[]byte, *T, *T, badgerutils.Iterator[[]byte, *T]]]
+type Store[K, V any, PV sstore.BSP[V]] struct {
+	dataStore   *sstore.Store[K, V, PV]
 	extStore    *pstore.Store
-	exts        *ordmap.Map[string, Extension[T]]
+	exts        *ordmap.Map[string, Extension[K, V]]
 	prefix      []byte
 	initialized bool
 	init        sync.Once
@@ -34,18 +32,18 @@ type Store[
 
 // New creates a new Store.
 func New[
-	T any,
-	PT sstore.BSP[T],
-](base badgerutils.Instantiator[badgerutils.BadgerStore]) *Store[T, PT] {
+	K, V any,
+	PV sstore.BSP[V],
+](base badgerutils.Instantiator[badgerutils.BadgerStore]) *Store[K, V, PV] {
 	var prefix []byte
 	if pfx, ok := base.(prefixed); ok {
 		prefix = pfx.Prefix()
 	}
 
-	store := &Store[T, PT]{
-		dataStore: sstore.New[T, PT](pstore.New(base, dataStorePrefix)),
+	store := &Store[K, V, PV]{
+		dataStore: sstore.New[K, V, PV](pstore.New(base, dataStorePrefix)),
 		extStore:  pstore.New(base, extStorePrefix),
-		exts:      ordmap.New[string, Extension[T]](),
+		exts:      ordmap.New[string, Extension[K, V]](),
 		prefix:    prefix,
 	}
 
@@ -57,7 +55,7 @@ type prefixed interface {
 }
 
 // WithExtension adds an extension to the store.
-func (s *Store[T, PT]) WithExtension(name string, ext Extension[T]) *Store[T, PT] {
+func (s *Store[K, V, PV]) WithExtension(name string, ext Extension[K, V]) *Store[K, V, PV] {
 	if s.initialized {
 		panic("store is already initialized")
 	}
@@ -75,21 +73,22 @@ func (s *Store[T, PT]) WithExtension(name string, ext Extension[T]) *Store[T, PT
 }
 
 // Instantiate creates a new Instance.
-func (s *Store[T, PT]) Instantiate(txn *badger.Txn) *Instance[T, PT] {
+func (s *Store[K, V, PV]) Instantiate(txn *badger.Txn) *Instance[K, V, PV] {
 	// Locking any changes to the store's configuration on first instantiation.
 	s.init.Do(func() {
 		s.initialized = true
 	})
 
-	return &Instance[T, PT]{
+	return &Instance[K, V, PV]{
 		dataStore: s.dataStore.Instantiate(txn),
+		keyCodec:  s.dataStore.KeyCodec(),
 		exts:      s.instantiateExts(txn),
 		prefix:    s.prefix,
 	}
 }
 
-func (s *Store[T, PT]) instantiateExts(txn *badger.Txn) *ordmap.Map[string, ExtensionInstance[T]] {
-	exts := ordmap.New[string, ExtensionInstance[T]]()
+func (s *Store[K, V, PV]) instantiateExts(txn *badger.Txn) *ordmap.Map[string, ExtensionInstance[K, V]] {
+	exts := ordmap.New[string, ExtensionInstance[K, V]]()
 	for name, ext := range s.exts.Iter() {
 		exts.Add(name, ext.Instantiate(txn))
 	}
@@ -98,7 +97,7 @@ func (s *Store[T, PT]) instantiateExts(txn *badger.Txn) *ordmap.Map[string, Exte
 }
 
 // GetExtension returns an extension by name.
-func (s *Store[T, PT]) GetExtension(name string) Extension[T] {
+func (s *Store[K, V, PV]) GetExtension(name string) Extension[K, V] {
 	if ext, ok := s.exts.Get(name); ok {
 		return ext
 	}
@@ -106,27 +105,25 @@ func (s *Store[T, PT]) GetExtension(name string) Extension[T] {
 	return nil
 }
 
-func (s *Store[T, PT]) Prefix() []byte {
+func (s *Store[K, V, PV]) Prefix() []byte {
 	return s.prefix
 }
 
 // Instance is an instance of Store.
-type Instance[
-	T any,
-	PT sstore.BSP[T],
-] struct {
-	dataStore badgerutils.StoreInstance[[]byte, *T, *T, badgerutils.Iterator[[]byte, *T]]
-	exts      *ordmap.Map[string, ExtensionInstance[T]]
+type Instance[K, V any, PV sstore.BSP[V]] struct {
+	dataStore badgerutils.StoreInstance[K, *V, *V, badgerutils.Iterator[K, *V]]
+	keyCodec  codec.Codec[K]
+	exts      *ordmap.Map[string, ExtensionInstance[K, V]]
 	prefix    []byte
 }
 
 // Prefix returns the prefix of the store.
-func (s *Instance[T, PT]) Prefix() []byte {
+func (s *Instance[K, V, PV]) Prefix() []byte {
 	return s.prefix
 }
 
 // Delete implements the badgerutils.StoreInstance interface.
-func (s *Instance[T, PT]) Delete(key []byte) error {
+func (s *Instance[K, V, PV]) Delete(key K) error {
 	err := s.onDelete(key)
 	if err != nil {
 		return err
@@ -140,7 +137,7 @@ func (s *Instance[T, PT]) Delete(key []byte) error {
 	return nil
 }
 
-func (s *Instance[T, PT]) onDelete(key []byte) error {
+func (s *Instance[K, V, PV]) onDelete(key K) error {
 	if s.exts.Len() == 0 {
 		return nil
 	}
@@ -150,7 +147,7 @@ func (s *Instance[T, PT]) onDelete(key []byte) error {
 		return err
 	}
 
-	ctx := context.Background()
+	ctx := s.newContext(key)
 	for _, name := range s.exts.Iter() {
 		err := name.OnDelete(ctx, key, data)
 		if err != nil {
@@ -161,23 +158,34 @@ func (s *Instance[T, PT]) onDelete(key []byte) error {
 	return nil
 }
 
+func (s *Instance[K, V, PV]) newContext(key K) context.Context {
+	ctx := context.Background()
+
+	ctx = context.WithValue(ctx, keyCodecContextKey, s.keyCodec)
+
+	kbz, _ := s.keyCodec.Encode(key)
+	ctx = context.WithValue(ctx, keyBytesContextKey, kbz)
+
+	return ctx
+}
+
 // Get implements the badgerutils.StoreInstance interface.
-func (s *Instance[T, PT]) Get(key []byte) (*T, error) {
+func (s *Instance[K, V, PV]) Get(key K) (*V, error) {
 	return s.dataStore.Get(key)
 }
 
 // NewIterator implements the badgerutils.StoreInstance interface.
-func (s *Instance[T, PT]) NewIterator(opts badger.IteratorOptions) badgerutils.Iterator[[]byte, *T] {
+func (s *Instance[K, V, PV]) NewIterator(opts badger.IteratorOptions) badgerutils.Iterator[K, *V] {
 	return s.dataStore.NewIterator(opts)
 }
 
 // Set implements the badgerutils.StoreInstance interface.
-func (s *Instance[T, PT]) Set(key []byte, v *T) error {
+func (s *Instance[K, V, PV]) Set(key K, v *V) error {
 	return s.SetWithOptions(key, v)
 }
 
 // SetWithOptions is a variant of Set that allows passing options to extensions.
-func (s *Instance[T, PT]) SetWithOptions(key []byte, v *T, opts ...any) error {
+func (s *Instance[K, V, PV]) SetWithOptions(key K, v *V, opts ...any) error {
 	err := s.onSet(key, v, opts...)
 	if err != nil {
 		return err
@@ -191,7 +199,7 @@ func (s *Instance[T, PT]) SetWithOptions(key []byte, v *T, opts ...any) error {
 	return nil
 }
 
-func (s *Instance[T, PT]) onSet(key []byte, new *T, opts ...any) error {
+func (s *Instance[K, V, PV]) onSet(key K, new *V, opts ...any) error {
 	if s.exts.Len() == 0 {
 		return nil
 	}
@@ -201,7 +209,7 @@ func (s *Instance[T, PT]) onSet(key []byte, new *T, opts ...any) error {
 		return fmt.Errorf("failed to get record: %w", err)
 	}
 
-	ctx := context.Background()
+	ctx := s.newContext(key)
 	for name, ext := range s.exts.Iter() {
 		extOpts := filterOptions(name, opts)
 		err := ext.OnSet(ctx, key, old, new, extOpts...)
@@ -229,7 +237,7 @@ func filterOptions(name string, opts []any) []any {
 }
 
 // GetExtension returns an extension's instance by name.
-func (s *Instance[T, PT]) GetExtension(name string) ExtensionInstance[T] {
+func (s *Instance[K, V, PV]) GetExtension(name string) ExtensionInstance[K, V] {
 	if ext, ok := s.exts.Get(name); ok {
 		return ext
 	}

@@ -19,7 +19,7 @@ func TestFlatten(t *testing.T) {
 
 	var its []badgerutils.Iterator[[]byte, *StructA]
 	for i := 0; i < 3; i++ {
-		store := sstore.New[StructA](pstore.New(nil, []byte{byte(i)}))
+		store := sstore.New[[]byte, StructA](pstore.New(nil, []byte{byte(i)}))
 		ins := store.Instantiate(txn)
 
 		for j := 0; j < 3; j++ {
