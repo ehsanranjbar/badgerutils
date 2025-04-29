@@ -26,37 +26,37 @@ func (t *SampleStruct) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, t)
 }
 
-type SampleEntity struct {
+type SampleRecord struct {
 	Id   int64  `json:"-"`
 	Name string `json:"name,omitempty"`
 }
 
-func NewSampleEntity(name string) *SampleEntity {
-	return &SampleEntity{
+func NewSampleEntity(name string) *SampleRecord {
+	return &SampleRecord{
 		Name: name,
 	}
 }
 
-func (t SampleEntity) GetId() int64 {
+func (t SampleRecord) GetId() int64 {
 	return t.Id
 }
 
-func (t *SampleEntity) SetId(id int64) {
+func (t *SampleRecord) SetId(id int64) {
 	t.Id = id
 }
 
-func (t SampleEntity) MarshalBinary() ([]byte, error) {
+func (t SampleRecord) MarshalBinary() ([]byte, error) {
 	return json.Marshal(t)
 }
 
-func (t *SampleEntity) UnmarshalBinary(data []byte) error {
+func (t *SampleRecord) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, t)
 }
 
-func NewEntityStore(prefix []byte) *recstore.Store[int64, SampleEntity, *SampleEntity] {
+func NewRecordStore(prefix []byte) *recstore.Store[int64, SampleRecord, *SampleRecord] {
 	var i int64
-	return recstore.New[int64, SampleEntity](pstore.New(nil, prefix)).
-		WithIdFunc(func(_ *SampleEntity) (int64, error) {
+	return recstore.New[int64, SampleRecord](pstore.New(nil, prefix)).
+		WithIdFunc(func(_ *SampleRecord) (int64, error) {
 			i++
 			return i, nil
 		})

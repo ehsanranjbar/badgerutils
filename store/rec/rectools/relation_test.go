@@ -15,15 +15,15 @@ import (
 type RelationSuite struct {
 	suite.Suite
 	txn        *badger.Txn
-	leftStore  *recstore.Store[int64, testutil.SampleEntity, *testutil.SampleEntity]
-	rightStore *recstore.Store[int64, testutil.SampleEntity, *testutil.SampleEntity]
+	leftStore  *recstore.Store[int64, testutil.SampleRecord, *testutil.SampleRecord]
+	rightStore *recstore.Store[int64, testutil.SampleRecord, *testutil.SampleRecord]
 	rel        *rectools.Relation[
-		int64, testutil.SampleEntity, *testutil.SampleEntity,
-		int64, testutil.SampleEntity, *testutil.SampleEntity,
+		int64, testutil.SampleRecord, *testutil.SampleRecord,
+		int64, testutil.SampleRecord, *testutil.SampleRecord,
 		testutil.SampleStruct, *testutil.SampleStruct,
 	]
-	leftInstance  *recstore.Instance[int64, testutil.SampleEntity, *testutil.SampleEntity]
-	rightInstance *recstore.Instance[int64, testutil.SampleEntity, *testutil.SampleEntity]
+	leftInstance  *recstore.Instance[int64, testutil.SampleRecord, *testutil.SampleRecord]
+	rightInstance *recstore.Instance[int64, testutil.SampleRecord, *testutil.SampleRecord]
 }
 
 func TestRelationSuite(t *testing.T) {
@@ -33,12 +33,12 @@ func TestRelationSuite(t *testing.T) {
 func (ts *RelationSuite) SetupTest() {
 	ts.txn = testutil.PrepareTxn(ts.T(), true)
 
-	ts.leftStore = testutil.NewEntityStore([]byte("left"))
-	ts.rightStore = testutil.NewEntityStore([]byte("right"))
+	ts.leftStore = testutil.NewRecordStore([]byte("left"))
+	ts.rightStore = testutil.NewRecordStore([]byte("right"))
 
 	ts.rel = rectools.NewRelation[
-		int64, testutil.SampleEntity, *testutil.SampleEntity,
-		int64, testutil.SampleEntity, *testutil.SampleEntity,
+		int64, testutil.SampleRecord, *testutil.SampleRecord,
+		int64, testutil.SampleRecord, *testutil.SampleRecord,
 		testutil.SampleStruct,
 	]("left-right", ts.leftStore, ts.rightStore)
 

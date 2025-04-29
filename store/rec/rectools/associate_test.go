@@ -15,11 +15,11 @@ import (
 type AssociateSuite struct {
 	suite.Suite
 	txn *badger.Txn
-	ps  *recstore.Store[int64, testutil.SampleEntity, *testutil.SampleEntity]
-	cs  *recstore.Store[int64, testutil.SampleEntity, *testutil.SampleEntity]
-	rel *rectools.Association[int64, testutil.SampleEntity, *testutil.SampleEntity, int64, testutil.SampleEntity, *testutil.SampleEntity]
-	psi *recstore.Instance[int64, testutil.SampleEntity, *testutil.SampleEntity]
-	csi *recstore.Instance[int64, testutil.SampleEntity, *testutil.SampleEntity]
+	ps  *recstore.Store[int64, testutil.SampleRecord, *testutil.SampleRecord]
+	cs  *recstore.Store[int64, testutil.SampleRecord, *testutil.SampleRecord]
+	rel *rectools.Association[int64, testutil.SampleRecord, *testutil.SampleRecord, int64, testutil.SampleRecord, *testutil.SampleRecord]
+	psi *recstore.Instance[int64, testutil.SampleRecord, *testutil.SampleRecord]
+	csi *recstore.Instance[int64, testutil.SampleRecord, *testutil.SampleRecord]
 }
 
 func TestAssociateSuite(t *testing.T) {
@@ -29,8 +29,8 @@ func TestAssociateSuite(t *testing.T) {
 func (ts *AssociateSuite) SetupTest() {
 	ts.txn = testutil.PrepareTxn(ts.T(), true)
 
-	ts.ps = testutil.NewEntityStore([]byte("p"))
-	ts.cs = testutil.NewEntityStore([]byte("c"))
+	ts.ps = testutil.NewRecordStore([]byte("p"))
+	ts.cs = testutil.NewRecordStore([]byte("c"))
 
 	ts.rel = rectools.Associate("p-c-rel", ts.ps, ts.cs)
 
@@ -125,9 +125,9 @@ func (ts *AssociateSuite) TestChildStore() {
 }
 
 func (ts *AssociateSuite) TestPIDFunc() {
-	ps := testutil.NewEntityStore([]byte("g"))
-	cs := testutil.NewEntityStore([]byte("f"))
-	rectools.Associate("g-f-rel", ps, cs).WithPIDFunc(func(_ *testutil.SampleEntity) (int64, error) {
+	ps := testutil.NewRecordStore([]byte("g"))
+	cs := testutil.NewRecordStore([]byte("f"))
+	rectools.Associate("g-f-rel", ps, cs).WithPIDFunc(func(_ *testutil.SampleRecord) (int64, error) {
 		return 1, nil
 	})
 
@@ -164,8 +164,8 @@ func (ts *AssociateSuite) TestPIDFunc() {
 }
 
 func (ts *AssociateSuite) TestPartial() {
-	ps := testutil.NewEntityStore([]byte("g"))
-	cs := testutil.NewEntityStore([]byte("f"))
+	ps := testutil.NewRecordStore([]byte("g"))
+	cs := testutil.NewRecordStore([]byte("f"))
 	rectools.Associate("g-f-rel", ps, cs).Partial()
 
 	c1 := testutil.NewSampleEntity("C1")
@@ -177,8 +177,8 @@ func (ts *AssociateSuite) TestPartial() {
 }
 
 func (ts *AssociateSuite) TestInstance() {
-	ps := testutil.NewEntityStore([]byte("g"))
-	cs := testutil.NewEntityStore([]byte("f"))
+	ps := testutil.NewRecordStore([]byte("g"))
+	cs := testutil.NewRecordStore([]byte("f"))
 	rel := rectools.Associate("g-f-rel", ps, cs).Partial()
 	ins := rel.Instantiate(ts.txn)
 
@@ -207,5 +207,5 @@ func (ts *AssociateSuite) TestInstance() {
 	childs, err := iters.Collect(it)
 	ts.NoError(err)
 
-	ts.Equal([]*testutil.SampleEntity{c1, c2}, childs)
+	ts.Equal([]*testutil.SampleRecord{c1, c2}, childs)
 }
